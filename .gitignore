@@ -12,5 +12,3 @@ uploads/
 dist/*.exe
 dist/*.blockmap
 dist/win-unpacked/
-!dist/Zaya Calling System Setup 2.0.5.exe
-!dist/Zaya Calling System Setup 2.0.5.exe.blockmap
