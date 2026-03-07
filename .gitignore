@@ -1,0 +1,16 @@
+node_modules/
+client/node_modules/
+client/node_modules_npm_broken_*/
+client/build/
+data/
+uploads/
+.env
+*.db
+
+.vercel
+.vercel.backup-*/
+dist/*.exe
+dist/*.blockmap
+dist/win-unpacked/
+!dist/Zaya Calling System Setup 2.0.5.exe
+!dist/Zaya Calling System Setup 2.0.5.exe.blockmap

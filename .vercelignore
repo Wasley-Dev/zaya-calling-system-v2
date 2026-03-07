@@ -1,0 +1,8 @@
+node_modules
+client/node_modules
+client/node_modules_*
+client/build
+dist
+.vercel
+*.log
+yarn-error.log
