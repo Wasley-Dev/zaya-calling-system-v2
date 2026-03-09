@@ -31,6 +31,7 @@ import {
   createSystemBackup,
   createSystemUser,
   getLiveSystemUsers,
+  getOfflineSyncState,
   getOwnProfile,
   getStats,
   getSystemBackups,
@@ -44,12 +45,15 @@ import {
   restoreSystemBackup,
   runSystemMaintenance,
   sendSystemHeartbeat,
+  subscribeToSyncState,
+  syncOfflineChanges,
   updateOwnProfile,
   updateSystemSettings,
   updateSystemUser,
 } from './utils/api';
 
 const AUTH_KEY = 'zaya-auth-session';
+const REMEMBER_ME_KEY = 'zaya-remember-me';
 const THEME_KEY = 'zaya-theme';
 const ORIENTATION_KEY = 'zaya-ai-orientation-complete';
 const DEFAULT_USER = { name: 'Zaya Operations', email: 'it@zayagroupltd.com', role: 'Super Admin' };
@@ -96,26 +100,55 @@ function LoadingScreen({ label, settings }) {
   );
 }
 
-function UpdateBanner({ updateInfo, onRefresh }) {
-  if (!updateInfo?.available) return null;
+function UpdateBanner({ updateInfo, onRefresh, syncInfo, onSyncNow }) {
+  const hasUpdate = Boolean(updateInfo?.available);
+  const hasSyncNotice = Boolean(syncInfo && (!syncInfo.online || syncInfo.pending > 0 || syncInfo.syncing));
+  if (!hasUpdate && !hasSyncNotice) return null;
   return (
-    <div className="update-banner" role="status">
-      <div>
-        <strong>System update available.</strong>
-        <span>A newer release is ready{updateInfo.version ? ` (${updateInfo.version})` : ''}. Refresh to load the latest changes.</span>
-      </div>
-      <button className="btn btn-primary btn-sm" onClick={onRefresh}>
-        <RefreshCw size={14} />
-        Refresh Now
-      </button>
-    </div>
+    <>
+      {hasSyncNotice ? (
+        <div className="update-banner" role="status">
+          <div>
+            <strong>
+              {!syncInfo.online ? 'Offline mode active.' : syncInfo.syncing ? 'Syncing offline changes.' : `${syncInfo.pending} offline change${syncInfo.pending === 1 ? '' : 's'} waiting.`}
+            </strong>
+            <span>
+              {!syncInfo.online
+                ? 'Cached data stays available and new changes will queue until the connection returns.'
+                : syncInfo.syncing
+                  ? 'Your queued updates are being sent to the server now.'
+                  : 'Reconnect and sync to push queued updates to the shared system.'}
+            </span>
+          </div>
+          {syncInfo.online ? (
+            <button className="btn btn-primary btn-sm" onClick={onSyncNow} disabled={syncInfo.syncing || syncInfo.pending === 0}>
+              <RefreshCw size={14} />
+              {syncInfo.syncing ? 'Syncing...' : 'Sync Now'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {hasUpdate ? (
+        <div className="update-banner" role="status">
+          <div>
+            <strong>System update available.</strong>
+            <span>A newer release is ready{updateInfo.version ? ` (${updateInfo.version})` : ''}. Refresh to load the latest changes.</span>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={onRefresh}>
+            <RefreshCw size={14} />
+            Refresh Now
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }
 
-function LoginPage({ onLogin, settings, updateInfo, onRefresh }) {
+function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe, syncInfo, onSyncNow }) {
   const branding = normalizeSettings(settings);
   const [email, setEmail] = useState(DEFAULT_USER.email);
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(initialRememberMe);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -125,7 +158,7 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh }) {
     setSubmitting(true);
     try {
       const response = await loginToSystem({ email: email.trim().toLowerCase(), password });
-      onLogin(response.data.data);
+      onLogin(response.data.data, rememberMe);
     } catch (err) {
       setError(err?.response?.data?.error || 'Login failed. Check the configured credentials.');
     } finally {
@@ -171,7 +204,7 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh }) {
         </section>
 
         <section className="auth-panel auth-panel-enterprise">
-          <UpdateBanner updateInfo={updateInfo} onRefresh={onRefresh} />
+          <UpdateBanner updateInfo={updateInfo} onRefresh={onRefresh} syncInfo={syncInfo} onSyncNow={onSyncNow} />
           <div className="auth-kicker">Secure Login</div>
           <div className="auth-heading-block">
             <h2>Access the control center.</h2>
@@ -185,6 +218,10 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh }) {
             <label className="form-group">
               <span className="form-label">Password</span>
               <input className="form-input" type="password" value={password} onChange={event => setPassword(event.target.value)} />
+            </label>
+            <label className="remember-row">
+              <input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)} />
+              <span>Remember me</span>
             </label>
             {error ? <div className="alert alert-error">{error}</div> : null}
             <button className="btn btn-primary auth-submit" type="submit" disabled={submitting}>
@@ -871,7 +908,7 @@ function Sidebar({ alerts, roleGroups, settings, theme, onToggleTheme, user, onL
   );
 }
 
-function Shell({ user, settings, theme, onToggleTheme, onLogout, onSaveSettings, onUpdateUser, updateInfo, onRefresh }) {
+function Shell({ user, settings, theme, onToggleTheme, onLogout, onSaveSettings, onUpdateUser, updateInfo, onRefresh, syncInfo, onSyncNow }) {
   const nav = useNavigate();
   const location = useLocation();
   const [alerts, setAlerts] = useState({ overdue: 0, expiring: 0 });
@@ -901,7 +938,7 @@ function Shell({ user, settings, theme, onToggleTheme, onLogout, onSaveSettings,
     <div className="shell">
       <Sidebar alerts={alerts} roleGroups={roleGroups} settings={settings} theme={theme} onToggleTheme={onToggleTheme} user={user} onLogout={onLogout} />
       <main className="main app-main-surface" style={appBackgroundStyle}>
-        <UpdateBanner updateInfo={updateInfo} onRefresh={onRefresh} />
+        <UpdateBanner updateInfo={updateInfo} onRefresh={onRefresh} syncInfo={syncInfo} onSyncNow={onSyncNow} />
         <div className="workspace-topbar">
           <div>
             <div className="workspace-kicker">{settings.systemTagline}</div>
@@ -947,13 +984,16 @@ function Shell({ user, settings, theme, onToggleTheme, onLogout, onSaveSettings,
 function AppFlow() {
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark');
   const [authUser, setAuthUser] = useState(() => {
-    const raw = localStorage.getItem(AUTH_KEY);
+    const storage = localStorage.getItem(REMEMBER_ME_KEY) === 'true' ? localStorage : sessionStorage;
+    const raw = storage.getItem(AUTH_KEY);
     return raw ? JSON.parse(raw) : null;
   });
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem(REMEMBER_ME_KEY) === 'true');
   const [bootStage, setBootStage] = useState('loading');
   const [orientationComplete, setOrientationComplete] = useState(() => localStorage.getItem(ORIENTATION_KEY) === 'true');
   const [settings, setSettings] = useState(FALLBACK_SETTINGS);
   const [updateInfo, setUpdateInfo] = useState({ available: false, version: '' });
+  const [syncInfo, setSyncInfo] = useState(() => getOfflineSyncState());
 
   useEffect(() => {
     document.body.dataset.theme = theme;
@@ -963,6 +1003,8 @@ function AppFlow() {
   useEffect(() => {
     getSystemSettings().then(response => setSettings(normalizeSettings(response.data.data))).catch(() => setSettings(FALLBACK_SETTINGS));
   }, []);
+
+  useEffect(() => subscribeToSyncState(setSyncInfo), []);
 
   useEffect(() => {
     if (!authUser) {
@@ -1021,14 +1063,20 @@ function AppFlow() {
     error: { iconTheme: { primary: 'var(--red)', secondary: 'var(--bg)' } },
   }), []);
 
-  function updateAuthUser(nextUser) {
-    localStorage.setItem(AUTH_KEY, JSON.stringify(nextUser));
+  function updateAuthUser(nextUser, shouldRemember = rememberMe) {
+    localStorage.setItem(REMEMBER_ME_KEY, shouldRemember ? 'true' : 'false');
+    setRememberMe(shouldRemember);
+    const storage = shouldRemember ? localStorage : sessionStorage;
+    const otherStorage = shouldRemember ? sessionStorage : localStorage;
+    storage.setItem(AUTH_KEY, JSON.stringify(nextUser));
+    otherStorage.removeItem(AUTH_KEY);
     setAuthUser(nextUser);
   }
 
   function handleLogout() {
     if (authUser?.sessionId) logoutSystemSession(authUser.sessionId).catch(() => {});
     localStorage.removeItem(AUTH_KEY);
+    sessionStorage.removeItem(AUTH_KEY);
     setAuthUser(null);
   }
 
@@ -1036,10 +1084,10 @@ function AppFlow() {
     <BrowserRouter>
       <Toaster position="top-right" toastOptions={toasterTheme} />
       {!authUser && bootStage === 'loading' ? <LoadingScreen label="Loading secure access and system settings." settings={settings} /> : null}
-      {!authUser && bootStage === 'login' ? <LoginPage onLogin={updateAuthUser} settings={settings} updateInfo={updateInfo} onRefresh={() => window.location.reload()} /> : null}
+      {!authUser && bootStage === 'login' ? <LoginPage onLogin={updateAuthUser} settings={settings} updateInfo={updateInfo} onRefresh={() => window.location.reload()} initialRememberMe={rememberMe} syncInfo={syncInfo} onSyncNow={() => syncOfflineChanges().catch(() => {})} /> : null}
       {authUser && bootStage === 'loading' ? <LoadingScreen label="Loading workspace, profile, and reporting modules." settings={settings} /> : null}
       {authUser && bootStage === 'orientation' ? <OrientationPage user={authUser} onFinish={() => { localStorage.setItem(ORIENTATION_KEY, 'true'); setOrientationComplete(true); setBootStage('app'); }} settings={settings} /> : null}
-      {authUser && bootStage === 'app' ? <Shell user={authUser} settings={settings} theme={theme} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onLogout={handleLogout} onSaveSettings={nextSettings => setSettings(normalizeSettings(nextSettings))} onUpdateUser={updateAuthUser} updateInfo={updateInfo} onRefresh={() => window.location.reload()} /> : null}
+      {authUser && bootStage === 'app' ? <Shell user={authUser} settings={settings} theme={theme} onToggleTheme={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} onLogout={handleLogout} onSaveSettings={nextSettings => setSettings(normalizeSettings(nextSettings))} onUpdateUser={updateAuthUser} updateInfo={updateInfo} onRefresh={() => window.location.reload()} syncInfo={syncInfo} onSyncNow={() => syncOfflineChanges().catch(() => {})} /> : null}
     </BrowserRouter>
   );
 }

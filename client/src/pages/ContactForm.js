@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Phone, Paperclip, Clock, Plus, Trash2, CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getContact, createContact, updateContact, saveDriver, updateDriver, uploadAttachment, deleteAttachment, logCall, deleteCall, getActiveSystemUsers } from '../utils/api';
+import { getContact, createContact, updateContact, saveDriver, updateDriver, uploadAttachment, deleteAttachment, logCall, deleteCall, getActiveSystemUsers, getStoredAuthUser } from '../utils/api';
 import { CALLER_TYPES, STATUS_OPTIONS, STAGE_OPTIONS, BOOKING_OPTIONS, COUNTRIES, LICENSE_CLASSES, VEHICLE_TYPES, CHECK_OPTIONS, CALL_OUTCOMES, PRIORITY_OPTIONS, fmt, fmtDT, fmtAgo, checkClass, outcomeClass, activityColor, initials, parseDocumentItems, getDocumentCoverageGrade, getDocumentGrade, getComplianceStatus, normalizeLicenseNumber, isValidLicenseNumber, normalizeBookingValue } from '../utils/helpers';
 
 const EMPTY_FORM = {
@@ -18,13 +18,7 @@ export default function ContactForm() {
   const { id }  = useParams();
   const isEdit  = Boolean(id);
   const navigate = useNavigate();
-  const currentUser = (() => {
-    try {
-      return JSON.parse(localStorage.getItem('zaya-auth-session') || 'null');
-    } catch (_) {
-      return null;
-    }
-  })();
+  const currentUser = getStoredAuthUser();
 
   const [form,       setForm]       = useState(EMPTY_FORM);
   const [driver,     setDriver]     = useState(EMPTY_DRV);
@@ -103,11 +97,14 @@ export default function ContactForm() {
     try {
       let cid = id;
       const normalizedForm = { ...form, Booking: normalizeBookingValue(form.Booking) };
-      if (isEdit) { await updateContact(id, normalizedForm); toast.success('Contact saved'); }
+      if (isEdit) {
+        const result = await updateContact(id, normalizedForm);
+        toast.success(result?.data?.queued ? 'Contact queued offline' : 'Contact saved');
+      }
       else {
         const r = await createContact(normalizedForm);
         cid = r.data.data.ID;
-        toast.success('Contact created');
+        toast.success(r?.data?.queued ? 'Contact queued offline' : 'Contact created');
       }
       if (form.Caller_Type === 'DRIVER') {
         const payload = {
@@ -116,8 +113,13 @@ export default function ContactForm() {
           CallLogsID: cid,
         };
         if (!payload.DriverName) payload.DriverName = `${form.First_Name} ${form.Last_Name}`;
-        if (drvId) await updateDriver(drvId, payload);
-        else await saveDriver(payload);
+        if (drvId) {
+          const response = await updateDriver(drvId, payload);
+          if (response?.data?.queued) toast.success('Driver details queued offline');
+        } else {
+          const response = await saveDriver(payload);
+          if (response?.data?.queued) toast.success('Driver details queued offline');
+        }
       }
       navigate('/contacts');
     } catch (err) {
@@ -129,8 +131,8 @@ export default function ContactForm() {
     if (!id) return;
     setLoggingCall(true);
     try {
-      await logCall(id, callForm);
-      toast.success('Call logged');
+      const response = await logCall(id, callForm);
+      toast.success(response?.data?.queued ? 'Call queued offline' : 'Call logged');
       // Reload
       const r = await getContact(id);
       setSessions(r.data.data.sessions || []);
@@ -158,7 +160,7 @@ export default function ContactForm() {
     try {
       const r = await uploadAttachment(id, file);
       setAttachments(prev => [...prev, r.data.data]);
-      toast.success('File uploaded');
+      toast.success(r?.data?.queued ? 'File queued offline' : 'File uploaded');
     } catch { toast.error('Upload failed'); }
     finally { setUploading(false); e.target.value = ''; }
   }
