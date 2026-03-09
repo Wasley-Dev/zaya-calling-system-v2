@@ -23,6 +23,7 @@ const {
 } = require('../db/database');
 
 const router = express.Router();
+const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com';
 
 function getRequestContext(req) {
   const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
@@ -109,7 +110,7 @@ router.post('/users', (req, res) => {
     const requester = requireSystemRole(req, ['Super Admin', 'Admin']);
     const payload = { ...(req.body || {}) };
     if (requester.role !== 'Super Admin' && payload.role !== 'User') {
-      return res.status(403).json({ success: false, error: 'Only the super admin can create admin accounts.' });
+      return res.status(403).json({ success: false, error: 'Only the super admin can create admin or super admin accounts.' });
     }
     const user = createSystemUser(payload);
     res.status(201).json({ success: true, data: user });
@@ -135,6 +136,9 @@ router.patch('/users/:id', (req, res) => {
     if (!targetUser) {
       return res.status(404).json({ success: false, error: 'User not found.' });
     }
+    if (targetUser.email === ROOT_SYSTEM_EMAIL) {
+      return res.status(403).json({ success: false, error: 'The primary super admin account cannot be edited by another user.' });
+    }
     if (requester.role !== 'Super Admin' && targetUser.role !== 'User') {
       return res.status(403).json({ success: false, error: 'Only the super admin can update admin accounts.' });
     }
@@ -156,6 +160,9 @@ router.post('/users/:id/password', (req, res) => {
     const targetUser = existingUsers.find(user => user.id === Number(req.params.id));
     if (!targetUser) {
       return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+    if (targetUser.email === ROOT_SYSTEM_EMAIL) {
+      return res.status(403).json({ success: false, error: 'The primary super admin password must be changed by that account.' });
     }
     if (requester.role !== 'Super Admin' && targetUser.role !== 'User') {
       return res.status(403).json({ success: false, error: 'Only the super admin can reset admin passwords.' });

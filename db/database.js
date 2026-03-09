@@ -5,12 +5,14 @@ const path = require('path');
 
 let db;
 const SYSTEM_ROLES = ['Super Admin', 'Admin', 'User'];
+const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com';
+const DEFAULT_LOGIN_IMAGE = 'https://images.pexels.com/photos/7869308/pexels-photo-7869308.jpeg?cs=srgb&dl=pexels-pavel-danilyuk-7869308.jpg&fm=jpg';
 const DEFAULT_SYSTEM_SETTINGS = {
-  systemName: 'Zaya Group Calling System ZGC System',
+  systemName: 'Zaya Group Calling System',
   systemTagline: 'Corporate Operations Workspace',
   welcomeMessage: 'Welcome back',
   logoUrl: '/zaya-logo.png?v=20260309-1',
-  loginImage: '/login-visual.jpg?v=20260309-1',
+  loginImage: DEFAULT_LOGIN_IMAGE,
   appBackgroundImage: '',
   loginHeadline: '',
   loginCopy: '',
@@ -45,6 +47,10 @@ function ensureStorageDirs() {
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function isProtectedSystemEmail(value) {
+  return normalizeEmail(value) === ROOT_SYSTEM_EMAIL;
 }
 
 function normalizeSystemRole(value, fallback = 'User') {
@@ -245,6 +251,20 @@ function initializeSchema() {
   database.prepare("UPDATE CallLogs SET Booking='1 - New Caller' WHERE Booking='1 - Green'").run();
   database.prepare("UPDATE SystemUsers SET Role='User' WHERE Role='Agent'").run();
   seedSystemSettings();
+  database.prepare(`
+    UPDATE SystemSettings
+    SET Setting_Value = 'Zaya Group Calling System',
+        Updated_At = CURRENT_TIMESTAMP
+    WHERE Setting_Key = 'systemName'
+      AND Setting_Value = 'Zaya Group Calling System ZGC System'
+  `).run();
+  database.prepare(`
+    UPDATE SystemSettings
+    SET Setting_Value = ?,
+        Updated_At = CURRENT_TIMESTAMP
+    WHERE Setting_Key = 'loginImage'
+      AND (Setting_Value = '' OR Setting_Value = '/login-visual.jpg?v=20260309-1')
+  `).run(DEFAULT_LOGIN_IMAGE);
 
   const count = database.prepare('SELECT COUNT(*) as c FROM CallLogs').get();
   if (count.c === 0) seedData();
@@ -264,7 +284,7 @@ function seedSystemSettings() {
 }
 
 function ensureBootstrapAdmin() {
-  const email = normalizeEmail(process.env.ADMIN_EMAIL || 'it@zayagroupltd.com');
+  const email = normalizeEmail(process.env.ADMIN_EMAIL || ROOT_SYSTEM_EMAIL);
   const password = String(process.env.ADMIN_PASSWORD || 'Kingsley06#').trim();
   if (!email || !password) return;
 
@@ -363,6 +383,9 @@ function updateSystemUser(userId, { name, role, isActive }) {
   if (!existing) {
     throw new Error('User not found.');
   }
+  if (isProtectedSystemEmail(existing.email)) {
+    throw new Error('The primary super admin account cannot be edited here.');
+  }
 
   database.prepare(`
     UPDATE SystemUsers
@@ -386,6 +409,9 @@ function setSystemUserPassword(userId, password) {
   const existing = getSystemUserById(userId);
   if (!existing) {
     throw new Error('User not found.');
+  }
+  if (isProtectedSystemEmail(existing.email)) {
+    throw new Error('The primary super admin password can only be changed by that account.');
   }
 
   const database = getDb();

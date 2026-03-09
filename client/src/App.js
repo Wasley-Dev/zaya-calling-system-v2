@@ -56,18 +56,20 @@ const AUTH_KEY = 'zaya-auth-session';
 const REMEMBER_ME_KEY = 'zaya-remember-me';
 const THEME_KEY = 'zaya-theme';
 const ORIENTATION_KEY = 'zaya-ai-orientation-complete';
+const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com';
+const DEFAULT_LOGIN_IMAGE = 'https://images.pexels.com/photos/7869308/pexels-photo-7869308.jpeg?cs=srgb&dl=pexels-pavel-danilyuk-7869308.jpg&fm=jpg';
 const DEFAULT_USER = { name: 'Zaya Operations', email: 'it@zayagroupltd.com', role: 'Super Admin' };
 const FALLBACK_SETTINGS = {
-  systemName: 'Zaya Group Calling System ZGC System',
+  systemName: 'Zaya Group Calling System',
   systemTagline: 'Corporate Operations Workspace',
   welcomeMessage: 'Welcome back',
   logoUrl: '/zaya-logo.png?v=20260309-1',
-  loginImage: '/login-visual.jpg?v=20260309-1',
+  loginImage: DEFAULT_LOGIN_IMAGE,
   appBackgroundImage: '',
-  loginHeadline: 'Welcome back to the ZRP corporate workspace.',
+  loginHeadline: 'Welcome back to the Zaya Group corporate workspace.',
   loginCopy: 'Review live calling activity, manage users, and move candidate operations forward from one command layer.',
   quote: 'Clear operations make growth easier to scale.',
-  quoteAuthor: 'ZRP Corporate Office',
+  quoteAuthor: 'Zaya Group Corporate Office',
   facts: [
     'Follow-up quality compounds faster than raw outreach volume.',
     'Shared systems reduce commercial and compliance friction.',
@@ -96,6 +98,15 @@ function buildLoginVisualStyle(settings) {
 
 function userInitials(name = '') {
   return String(name || '').split(' ').map(part => part[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read file.'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function LoadingScreen({ label, settings }) {
@@ -322,6 +333,30 @@ function ProfilePage({ user, onUpdateUser }) {
     }
   }
 
+  async function handleProfileImageUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Select an image file.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Profile image must be 5 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
+    try {
+      const avatarUrl = await fileToDataUrl(file);
+      setProfile(current => ({ ...current, avatarUrl }));
+      toast.success('Profile picture ready to save.');
+    } catch (_) {
+      toast.error('Failed to load profile image.');
+    } finally {
+      event.target.value = '';
+    }
+  }
+
   return (
     <div>
       <div className="pg-header">
@@ -348,6 +383,14 @@ function ProfilePage({ user, onUpdateUser }) {
             <div className="form-group">
               <label className="form-label">Email</label>
               <input className="form-input" value={profile.email || ''} disabled />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Profile Picture Upload</label>
+              <label className="btn btn-secondary" style={{ width: 'fit-content' }}>
+                Upload Image
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleProfileImageUpload} />
+              </label>
+              <div className="form-hint">Upload a picture or paste an image URL below.</div>
             </div>
             <div className="form-group">
               <label className="form-label">Profile Picture URL</label>
@@ -415,6 +458,11 @@ function AdminConsole({ user, settings, onSaveSettings }) {
   function updateDraft(key, value) {
     setDraft(current => ({ ...current, [key]: value }));
   }
+
+  const roleSummary = ['Super Admin', 'Admin', 'User'].map(role => ({
+    role,
+    members: systemUsers.filter(member => member.role === role),
+  }));
 
   async function createUser() {
     if (!newUser.name.trim() || !newUser.email.trim() || !newUser.password.trim()) {
@@ -574,6 +622,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                 <div className="form-group">
                   <label className="form-label">Email</label>
                   <input className="form-input" type="email" value={newUser.email} onChange={event => setNewUser(current => ({ ...current, email: event.target.value }))} />
+                  <div className="form-hint">`it@zayagroupltd.com` is reserved for the primary super admin account.</div>
                 </div>
               </div>
               <div className="form-row cols-2">
@@ -582,7 +631,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                   <select className="form-input" value={newUser.role} onChange={event => setNewUser(current => ({ ...current, role: event.target.value }))}>
                     {roleOptions.map(role => <option key={role}>{role}</option>)}
                   </select>
-                  {!canManageAdmins ? <div className="form-hint">Only the super admin can create admin accounts.</div> : null}
+                  {!canManageAdmins ? <div className="form-hint">Only the super admin can create admin or super admin accounts.</div> : <div className="form-hint">Only the super admin can add another super admin.</div>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Password</label>
@@ -590,6 +639,32 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                 </div>
               </div>
               <button className="btn btn-primary" onClick={createUser} disabled={busy}>Create Account</button>
+            </div>
+
+            <div className="card">
+              <div className="card-title">Users Side Panel</div>
+              <div className="role-summary-list">
+                {roleSummary.map(group => (
+                  <div key={group.role} className="role-summary-block">
+                    <div className="role-summary-head">
+                      <span>{group.role}</span>
+                      <strong>{group.members.length}</strong>
+                    </div>
+                    {group.members.length ? (
+                      <div className="role-summary-members">
+                        {group.members.map(member => (
+                          <div key={member.id} className="role-summary-member">
+                            {member.avatarUrl ? <img src={member.avatarUrl} alt={member.name} className="profile-avatar profile-avatar-sm" /> : <div className="avatar profile-avatar-sm">{userInitials(member.name)}</div>}
+                            <span>{member.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="form-hint">No {group.role.toLowerCase()} accounts yet.</div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="card">
@@ -607,7 +682,8 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                   </thead>
                   <tbody>
                     {systemUsers.map(member => {
-                      const locked = !canManageAdmins && member.role !== 'User';
+                      const protectedRoot = member.email === ROOT_SYSTEM_EMAIL;
+                      const locked = protectedRoot || (!canManageAdmins && member.role !== 'User');
                       return (
                         <tr key={member.id}>
                           <td>
@@ -623,6 +699,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                             <select className="filter-sel" value={member.role} onChange={event => changeRole(member, event.target.value)} disabled={locked}>
                               {(canManageAdmins ? ['User', 'Admin', 'Super Admin'] : ['User']).map(role => <option key={role}>{role}</option>)}
                             </select>
+                            {protectedRoot ? <div className="form-hint">Primary super admin account is protected.</div> : null}
                           </td>
                           <td><button className={`btn btn-xs ${member.isActive ? 'btn-success' : 'btn-danger'}`} onClick={() => toggleUser(member)} disabled={locked}>{member.isActive ? 'Active' : 'Disabled'}</button></td>
                           <td style={{ fontSize: 12, color: 'var(--txt2)' }}>{member.lastLoginAt || 'Never'}</td>
@@ -911,6 +988,12 @@ function Sidebar({ alerts, roleGroups, settings, theme, onToggleTheme, user, onL
             </button>
           </>
         ) : null}
+
+        <div className="sb-section" style={{ marginTop: 8 }}>Access Level</div>
+        <div className="sidebar-role-note">
+          <strong>{user.role}</strong>
+          <span>{user.role === 'Super Admin' ? 'Full system authority' : user.role === 'Admin' ? 'User and workflow control' : 'Operational workspace access'}</span>
+        </div>
       </nav>
 
       <div className="sb-controls">
