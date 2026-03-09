@@ -172,6 +172,35 @@ Or deploy to any Node.js host (Railway, Render, Heroku, VPS):
 
 ---
 
+## Desktop Auto Updates
+
+Desktop releases now support Electron auto-update through GitHub Releases.
+
+- `main` branch pushes build installer artifacts only.
+- `v*` tags publish signed Windows and macOS releases for the update feed.
+- Packaged apps check for updates automatically, download them in the background, and prompt users to restart when the update is ready.
+
+Required GitHub Actions secrets for signed release publishing:
+
+- `WINDOWS_CSC_LINK`
+- `WINDOWS_CSC_KEY_PASSWORD`
+- `MACOS_CSC_LINK`
+- `MACOS_CSC_KEY_PASSWORD`
+- `APPLE_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+- `APPLE_TEAM_ID`
+
+Release flow:
+
+```bash
+git tag v2.0.7
+git push origin v2.0.7
+```
+
+That tag builds signed installers, publishes the GitHub Release feed files, and makes the update available to installed desktop clients.
+
+---
+
 ## Customisation
 
 - **Add caller types**: Edit `CALLER_TYPES` in `client/src/utils/helpers.js`

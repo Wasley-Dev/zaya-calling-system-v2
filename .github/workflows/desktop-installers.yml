@@ -5,6 +5,11 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
@@ -36,8 +41,24 @@ jobs:
       - name: Prepare Electron native dependencies
         run: npx electron-builder install-app-deps
 
+      - name: Validate Windows release signing secrets
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace("${{ secrets.WINDOWS_CSC_LINK }}")) { throw "Missing WINDOWS_CSC_LINK secret." }
+          if ([string]::IsNullOrWhiteSpace("${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}")) { throw "Missing WINDOWS_CSC_KEY_PASSWORD secret." }
+
       - name: Build Windows installer
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: npx electron-builder --win nsis --publish never
+
+      - name: Publish signed Windows release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: npx electron-builder --win nsis --publish always
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -78,8 +99,29 @@ jobs:
       - name: Prepare Electron native dependencies
         run: npx electron-builder install-app-deps
 
+      - name: Validate macOS release signing secrets
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          if [ -z "${{ secrets.MACOS_CSC_LINK }}" ]; then echo "Missing MACOS_CSC_LINK secret."; exit 1; fi
+          if [ -z "${{ secrets.MACOS_CSC_KEY_PASSWORD }}" ]; then echo "Missing MACOS_CSC_KEY_PASSWORD secret."; exit 1; fi
+          if [ -z "${{ secrets.APPLE_ID }}" ]; then echo "Missing APPLE_ID secret."; exit 1; fi
+          if [ -z "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" ]; then echo "Missing APPLE_APP_SPECIFIC_PASSWORD secret."; exit 1; fi
+          if [ -z "${{ secrets.APPLE_TEAM_ID }}" ]; then echo "Missing APPLE_TEAM_ID secret."; exit 1; fi
+
       - name: Build macOS installer
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: npx electron-builder --mac dmg --publish never
+
+      - name: Publish signed macOS release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder --mac dmg zip --publish always
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4

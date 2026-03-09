@@ -15,9 +15,9 @@
     "start:prod": "npm run build:web && cross-env NODE_ENV=production node server.js",
     "desktop:start": "electron .",
     "desktop:dev": "concurrently \"npm run dev\" \"npm run client\" \"wait-on tcp:3000 tcp:5000 && electron .\"",
-    "desktop:dist": "npm run build:web && electron-builder --win nsis --mac dmg",
+    "desktop:dist": "npm run build:web && electron-builder --win nsis --mac dmg zip",
     "desktop:dist:win": "npm run build:web && electron-builder --win nsis",
-    "desktop:dist:mac": "npm run build:web && electron-builder --mac dmg",
+    "desktop:dist:mac": "npm run build:web && electron-builder --mac dmg zip",
     "desktop:pack": "npm run build:web && electron-builder --dir --win --mac",
     "desktop:pack:win": "npm run build:web && electron-builder --dir --win",
     "desktop:pack:mac": "npm run build:web && electron-builder --dir --mac"
@@ -27,6 +27,7 @@
     "compression": "^1.7.4",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "electron-updater": "^6.8.3",
     "express": "^4.18.2",
     "helmet": "^7.1.0",
     "morgan": "^1.10.0",
@@ -44,7 +45,16 @@
   "build": {
     "appId": "com.zayagroup.callingsystem",
     "productName": "Zaya Calling System",
+    "artifactName": "${productName} Setup ${version}.${ext}",
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Wasley-Dev",
+        "repo": "zaya-calling-system-v2",
+        "releaseType": "release"
+      }
+    ],
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
     ],
@@ -65,7 +75,8 @@
     "mac": {
       "icon": "build/icon.png",
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "category": "public.app-category.business"
     },
