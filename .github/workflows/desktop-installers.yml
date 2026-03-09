@@ -37,7 +37,7 @@ jobs:
         run: npx electron-builder install-app-deps
 
       - name: Build Windows installer
-        run: npx electron-builder --win nsis
+        run: npx electron-builder --win nsis --publish never
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -79,7 +79,7 @@ jobs:
         run: npx electron-builder install-app-deps
 
       - name: Build macOS installer
-        run: npx electron-builder --mac dmg
+        run: npx electron-builder --mac dmg --publish never
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
