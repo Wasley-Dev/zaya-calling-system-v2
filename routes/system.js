@@ -1,19 +1,24 @@
 const express = require('express');
 const {
   authenticateSystemUser,
+  changeOwnPassword,
   closeSystemSession,
   createBackup,
   createSystemSession,
   createSystemUser,
   getSystemSession,
+  getSystemSettings,
   getStoragePaths,
   listActiveUserNames,
   listBackups,
   listLiveSystemUsers,
   listSystemUsers,
   restoreBackup,
+  runMaintenanceAction,
   setSystemUserPassword,
   touchSystemSession,
+  updateOwnProfile,
+  updateSystemSettings,
   updateSystemUser,
 } = require('../db/database');
 
@@ -103,8 +108,8 @@ router.post('/users', (req, res) => {
   try {
     const requester = requireSystemRole(req, ['Super Admin', 'Admin']);
     const payload = { ...(req.body || {}) };
-    if (requester.role !== 'Super Admin' && payload.role === 'Super Admin') {
-      return res.status(403).json({ success: false, error: 'Only the super admin can create another super admin.' });
+    if (requester.role !== 'Super Admin' && payload.role !== 'User') {
+      return res.status(403).json({ success: false, error: 'Only the super admin can create admin accounts.' });
     }
     const user = createSystemUser(payload);
     res.status(201).json({ success: true, data: user });
@@ -130,11 +135,11 @@ router.patch('/users/:id', (req, res) => {
     if (!targetUser) {
       return res.status(404).json({ success: false, error: 'User not found.' });
     }
-    if (requester.role !== 'Super Admin' && targetUser.role === 'Super Admin') {
-      return res.status(403).json({ success: false, error: 'Only the super admin can update another super admin.' });
+    if (requester.role !== 'Super Admin' && targetUser.role !== 'User') {
+      return res.status(403).json({ success: false, error: 'Only the super admin can update admin accounts.' });
     }
-    if (requester.role !== 'Super Admin' && req.body?.role === 'Super Admin') {
-      return res.status(403).json({ success: false, error: 'Only the super admin can assign the super admin role.' });
+    if (requester.role !== 'Super Admin' && req.body?.role && req.body.role !== 'User') {
+      return res.status(403).json({ success: false, error: 'Only the super admin can assign admin roles.' });
     }
     const user = updateSystemUser(Number(req.params.id), req.body || {});
     res.json({ success: true, data: user });
@@ -152,14 +157,62 @@ router.post('/users/:id/password', (req, res) => {
     if (!targetUser) {
       return res.status(404).json({ success: false, error: 'User not found.' });
     }
-    if (requester.role !== 'Super Admin' && targetUser.role === 'Super Admin') {
-      return res.status(403).json({ success: false, error: 'Only the super admin can reset another super admin password.' });
+    if (requester.role !== 'Super Admin' && targetUser.role !== 'User') {
+      return res.status(403).json({ success: false, error: 'Only the super admin can reset admin passwords.' });
     }
     const user = setSystemUserPassword(Number(req.params.id), req.body?.password);
     res.json({ success: true, data: user });
   } catch (error) {
     const status = /not found/i.test(error.message) ? 404 : 400;
     res.status(error.status || status).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/profile', (req, res) => {
+  try {
+    const session = requireSystemSession(req);
+    const users = listSystemUsers();
+    const user = users.find(item => item.id === session.userId);
+    res.json({ success: true, data: user || null });
+  } catch (error) {
+    res.status(error.status || 500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/profile', (req, res) => {
+  try {
+    const session = requireSystemSession(req);
+    const user = updateOwnProfile(session.userId, req.body || {});
+    res.json({ success: true, data: user });
+  } catch (error) {
+    res.status(error.status || 400).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/profile/password', (req, res) => {
+  try {
+    const session = requireSystemSession(req);
+    const user = changeOwnPassword(session.userId, req.body?.currentPassword, req.body?.nextPassword);
+    res.json({ success: true, data: user });
+  } catch (error) {
+    res.status(error.status || 400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/settings', (req, res) => {
+  try {
+    res.json({ success: true, data: getSystemSettings() });
+  } catch (error) {
+    res.status(error.status || 500).json({ success: false, error: error.message });
+  }
+});
+
+router.patch('/settings', (req, res) => {
+  try {
+    requireSystemRole(req, ['Super Admin', 'Admin']);
+    res.json({ success: true, data: updateSystemSettings(req.body || {}) });
+  } catch (error) {
+    res.status(error.status || 400).json({ success: false, error: error.message });
   }
 });
 
@@ -230,6 +283,16 @@ router.get('/status', (req, res) => {
     });
   } catch (error) {
     res.status(error.status || 500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/maintenance', (req, res) => {
+  try {
+    requireSystemRole(req, ['Super Admin', 'Admin']);
+    const result = runMaintenanceAction(req.body?.action);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(error.status || 400).json({ success: false, error: error.message });
   }
 });
 

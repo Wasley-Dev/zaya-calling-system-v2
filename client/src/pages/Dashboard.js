@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Car, CheckCircle, Clock, TrendingUp, Phone, UserCheck, AlertTriangle, ArrowUpRight, ArrowDownRight, PhoneCall, Activity } from 'lucide-react';
+import { Users, Car, CheckCircle, Clock, TrendingUp, Phone, UserCheck, AlertTriangle, ArrowUpRight, ArrowDownRight, PhoneCall, Activity, Printer } from 'lucide-react';
 import { getStats, getActivity } from '../utils/api';
 import { fmt, fmtAgo, statusClass, stageClass, typeClass, activityColor, initials } from '../utils/helpers';
 
@@ -24,7 +24,7 @@ function Kpi({ label, value, sub, color, icon: Icon, trend, trendLabel }) {
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard({ user }) {
   const [stats,    setStats]   = useState(null);
   const [activity, setActivity] = useState([]);
   const [contacts, setContacts] = useState([]);
@@ -63,9 +63,10 @@ export default function Dashboard() {
       <div className="pg-header">
         <div>
           <div className="pg-title">Dashboard</div>
-          <div className="pg-subtitle">Good to see you — here's what's happening today</div>
+          <div className="pg-subtitle">Good to see you, {(user?.name || 'team').split(' ')[0]}.</div>
         </div>
         <div className="pg-actions">
+          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><Printer size={14} /> Print</button>
           <button className="btn btn-secondary btn-sm" onClick={() => navigate('/reports')}>View Reports</button>
           <button className="btn btn-primary" onClick={() => navigate('/contacts/new')}>+ New Contact</button>
         </div>
@@ -142,7 +143,7 @@ export default function Dashboard() {
           <div className="card" style={{ maxHeight: 420, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div className="card-title" style={{ margin: 0 }}>Activity</div>
-              <button className="btn btn-ghost btn-sm" onClick={() => navigate('/activity')}><Activity size={12} /> All</button>
+              <span className="badge b-muted"><Activity size={12} /> Live feed</span>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {activity.slice(0,10).map(a => {

@@ -5,6 +5,19 @@ const path = require('path');
 
 let db;
 const SYSTEM_ROLES = ['Super Admin', 'Admin', 'User'];
+const DEFAULT_SYSTEM_SETTINGS = {
+  systemName: 'ZRP Calling System',
+  systemTagline: 'Corporate Operations Workspace',
+  welcomeMessage: 'Welcome back',
+  logoUrl: '/zaya-logo.png?v=20260306-2',
+  loginImage: '',
+  appBackgroundImage: '',
+  loginHeadline: '',
+  loginCopy: '',
+  quote: '',
+  quoteAuthor: '',
+  facts: [],
+};
 
 function getStoragePaths() {
   const dbPath = process.env.DB_PATH || path.join(__dirname, '../data/zaya.db');
@@ -72,6 +85,7 @@ function serializeUser(row) {
     id: row.UserID,
     name: row.Name,
     email: row.Email,
+    avatarUrl: row.Avatar_URL || '',
     role: row.Role === 'Agent' ? 'User' : row.Role,
     isActive: Boolean(row.IsActive),
     lastLoginAt: row.Last_Login_At,
@@ -182,6 +196,7 @@ function initializeSchema() {
       UserID          INTEGER PRIMARY KEY AUTOINCREMENT,
       Name            TEXT    NOT NULL,
       Email           TEXT    NOT NULL UNIQUE,
+      Avatar_URL      TEXT    DEFAULT '',
       Role            TEXT    NOT NULL DEFAULT 'User',
       Password_Salt   TEXT    NOT NULL,
       Password_Hash   TEXT    NOT NULL,
@@ -205,6 +220,12 @@ function initializeSchema() {
       FOREIGN KEY (UserID) REFERENCES SystemUsers(UserID) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS SystemSettings (
+      Setting_Key     TEXT PRIMARY KEY,
+      Setting_Value   TEXT NOT NULL DEFAULT '',
+      Updated_At      DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_cl_status      ON CallLogs(Status);
     CREATE INDEX IF NOT EXISTS idx_cl_stage       ON CallLogs(Stage);
     CREATE INDEX IF NOT EXISTS idx_cl_type        ON CallLogs(Caller_Type);
@@ -216,11 +237,30 @@ function initializeSchema() {
     CREATE INDEX IF NOT EXISTS idx_system_sessions_user ON SystemSessions(UserID);
   `);
 
+  const userColumns = database.prepare("PRAGMA table_info(SystemUsers)").all();
+  if (!userColumns.some(column => column.name === 'Avatar_URL')) {
+    database.prepare("ALTER TABLE SystemUsers ADD COLUMN Avatar_URL TEXT DEFAULT ''").run();
+  }
+
   database.prepare("UPDATE CallLogs SET Booking='1 - New Caller' WHERE Booking='1 - Green'").run();
   database.prepare("UPDATE SystemUsers SET Role='User' WHERE Role='Agent'").run();
+  seedSystemSettings();
 
   const count = database.prepare('SELECT COUNT(*) as c FROM CallLogs').get();
   if (count.c === 0) seedData();
+}
+
+function seedSystemSettings() {
+  const database = db;
+  const upsert = database.prepare(`
+    INSERT INTO SystemSettings (Setting_Key, Setting_Value, Updated_At)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(Setting_Key) DO NOTHING
+  `);
+
+  Object.entries(DEFAULT_SYSTEM_SETTINGS).forEach(([key, value]) => {
+    upsert.run(key, typeof value === 'string' ? value : JSON.stringify(value));
+  });
 }
 
 function ensureBootstrapAdmin() {
@@ -250,7 +290,7 @@ function ensureBootstrapAdmin() {
 function listSystemUsers() {
   const database = getDb();
   return database.prepare(`
-    SELECT su.UserID, su.Name, su.Email, su.Role, su.IsActive, su.Last_Login_At, su.Created_At, su.Updated_At,
+    SELECT su.UserID, su.Name, su.Email, su.Avatar_URL, su.Role, su.IsActive, su.Last_Login_At, su.Created_At, su.Updated_At,
            ss.SessionID, ss.Is_Online AS Session_Is_Online, ss.IP_Address, ss.Geo_Country, ss.Geo_Region, ss.Geo_City,
            ss.User_Agent, ss.Last_Seen_At AS Session_Last_Seen_At
     FROM SystemUsers su
@@ -310,7 +350,7 @@ function createSystemUser({ name, email, role = 'User', password, isActive = tru
 function getSystemUserById(userId) {
   const database = getDb();
   const row = database.prepare(`
-    SELECT UserID, Name, Email, Role, IsActive, Last_Login_At, Created_At, Updated_At
+    SELECT UserID, Name, Email, Avatar_URL, Role, IsActive, Last_Login_At, Created_At, Updated_At
     FROM SystemUsers
     WHERE UserID = ?
   `).get(userId);
@@ -371,6 +411,101 @@ function authenticateSystemUser(email, password) {
   return getSystemUserById(row.UserID);
 }
 
+function getSystemSettings() {
+  const database = getDb();
+  const rows = database.prepare(`
+    SELECT Setting_Key, Setting_Value
+    FROM SystemSettings
+    ORDER BY Setting_Key ASC
+  `).all();
+
+  const settings = { ...DEFAULT_SYSTEM_SETTINGS };
+  rows.forEach(row => {
+    if (row.Setting_Key === 'facts') {
+      try {
+        settings.facts = JSON.parse(row.Setting_Value || '[]');
+      } catch (_) {
+        settings.facts = [];
+      }
+      return;
+    }
+
+    settings[row.Setting_Key] = row.Setting_Value;
+  });
+
+  return settings;
+}
+
+function updateSystemSettings(patch = {}) {
+  const database = getDb();
+  const upsert = database.prepare(`
+    INSERT INTO SystemSettings (Setting_Key, Setting_Value, Updated_At)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(Setting_Key) DO UPDATE SET
+      Setting_Value = excluded.Setting_Value,
+      Updated_At = CURRENT_TIMESTAMP
+  `);
+
+  Object.keys(DEFAULT_SYSTEM_SETTINGS).forEach(key => {
+    if (!(key in patch)) return;
+    const value = key === 'facts'
+      ? JSON.stringify(Array.isArray(patch[key]) ? patch[key].map(item => String(item).trim()).filter(Boolean) : [])
+      : String(patch[key] || '').trim();
+    upsert.run(key, value);
+  });
+
+  return getSystemSettings();
+}
+
+function updateOwnProfile(userId, { name, avatarUrl } = {}) {
+  const existing = getSystemUserById(userId);
+  if (!existing) {
+    throw new Error('User not found.');
+  }
+
+  const nextName = String(name || '').trim();
+  if (!nextName) {
+    throw new Error('Name is required.');
+  }
+
+  const database = getDb();
+  database.prepare(`
+    UPDATE SystemUsers
+    SET Name = ?, Avatar_URL = ?, Updated_At = CURRENT_TIMESTAMP
+    WHERE UserID = ?
+  `).run(nextName, String(avatarUrl || '').trim(), userId);
+
+  return getSystemUserById(userId);
+}
+
+function changeOwnPassword(userId, currentPassword, nextPassword) {
+  const database = getDb();
+  const row = database.prepare(`
+    SELECT UserID, Password_Salt, Password_Hash
+    FROM SystemUsers
+    WHERE UserID = ?
+  `).get(userId);
+
+  if (!row) {
+    throw new Error('User not found.');
+  }
+  if (!verifyPassword(currentPassword, row.Password_Salt, row.Password_Hash)) {
+    throw new Error('Current password is incorrect.');
+  }
+  if (!String(nextPassword || '').trim()) {
+    throw new Error('New password is required.');
+  }
+
+  const { salt, hash } = createPasswordHash(nextPassword);
+  database.prepare(`
+    UPDATE SystemUsers
+    SET Password_Salt = ?, Password_Hash = ?, Updated_At = CURRENT_TIMESTAMP
+    WHERE UserID = ?
+  `).run(salt, hash, userId);
+
+  return getSystemUserById(userId);
+}
+
 function createSystemSession(userId, context = {}) {
   const database = getDb();
   const sessionId = crypto.randomUUID();
@@ -391,7 +526,7 @@ function createSystemSession(userId, context = {}) {
 function getSystemSession(sessionId) {
   const database = getDb();
   const row = database.prepare(`
-    SELECT ss.*, su.Name, su.Email, su.Role
+    SELECT ss.*, su.Name, su.Email, su.Avatar_URL, su.Role
     FROM SystemSessions ss
     JOIN SystemUsers su ON su.UserID = ss.UserID
     WHERE ss.SessionID = ?
@@ -404,6 +539,7 @@ function getSystemSession(sessionId) {
     userId: row.UserID,
     name: row.Name,
     email: row.Email,
+    avatarUrl: row.Avatar_URL || '',
     role: row.Role === 'Agent' ? 'User' : row.Role,
     isOnline: Boolean(row.Is_Online),
     ipAddress: row.IP_Address || '',
@@ -456,7 +592,7 @@ function closeSystemSession(sessionId) {
 function listLiveSystemUsers() {
   const database = getDb();
   return database.prepare(`
-    SELECT ss.*, su.Name, su.Email, su.Role
+    SELECT ss.*, su.Name, su.Email, su.Avatar_URL, su.Role
     FROM SystemSessions ss
     JOIN SystemUsers su ON su.UserID = ss.UserID
     WHERE ss.Is_Online = 1
@@ -467,6 +603,7 @@ function listLiveSystemUsers() {
     userId: row.UserID,
     name: row.Name,
     email: row.Email,
+    avatarUrl: row.Avatar_URL || '',
     role: row.Role === 'Agent' ? 'User' : row.Role,
     ipAddress: row.IP_Address || '',
     location: [row.Geo_City, row.Geo_Region, row.Geo_Country].filter(Boolean).join(', '),
@@ -474,6 +611,32 @@ function listLiveSystemUsers() {
     createdAt: row.Created_At,
     userAgent: row.User_Agent || '',
   }));
+}
+
+function runMaintenanceAction(action) {
+  const database = getDb();
+  const normalizedAction = String(action || '').trim();
+
+  if (normalizedAction === 'vacuum') {
+    database.exec('VACUUM');
+    return { action: normalizedAction, message: 'Database vacuum completed.' };
+  }
+  if (normalizedAction === 'checkpoint') {
+    if (!process.env.VERCEL) {
+      database.pragma('wal_checkpoint(TRUNCATE)');
+    }
+    return { action: normalizedAction, message: 'WAL checkpoint completed.' };
+  }
+  if (normalizedAction === 'clear-offline-sessions') {
+    const result = database.prepare(`
+      DELETE FROM SystemSessions
+      WHERE Is_Online = 0
+         OR Last_Seen_At < datetime('now', '-7 days')
+    `).run();
+    return { action: normalizedAction, message: `Removed ${result.changes || 0} offline session(s).` };
+  }
+
+  throw new Error('Unknown maintenance action.');
 }
 
 function getBackupMetadata(filePath) {
@@ -628,12 +791,14 @@ function seedData() {
 
 module.exports = {
   authenticateSystemUser,
+  changeOwnPassword,
   closeDb,
   closeSystemSession,
   createBackup,
   createSystemSession,
   createSystemUser,
   getSystemSession,
+  getSystemSettings,
   getDb,
   getStoragePaths,
   listActiveUserNames,
@@ -641,7 +806,10 @@ module.exports = {
   listLiveSystemUsers,
   listSystemUsers,
   restoreBackup,
+  runMaintenanceAction,
   setSystemUserPassword,
   touchSystemSession,
+  updateOwnProfile,
+  updateSystemSettings,
   updateSystemUser,
 };

@@ -56,12 +56,18 @@ export const getLiveSystemUsers = () => api.get('/system/users/live');
 export const createSystemUser = payload => api.post('/system/users', payload);
 export const updateSystemUser = (id, payload) => api.patch(`/system/users/${id}`, payload);
 export const resetSystemUserPassword = (id, password) => api.post(`/system/users/${id}/password`, { password });
+export const getOwnProfile = () => api.get('/system/profile');
+export const updateOwnProfile = payload => api.patch('/system/profile', payload);
+export const changeOwnPassword = payload => api.post('/system/profile/password', payload);
+export const getSystemSettings = () => api.get('/system/settings');
+export const updateSystemSettings = payload => api.patch('/system/settings', payload);
 export const getSystemBackups = () => api.get('/system/backups');
 export const createSystemBackup = payload => api.post('/system/backups', payload || {});
 export const restoreSystemBackup = backupName => api.post('/system/recovery/restore', { backupName });
 export const sendSystemHeartbeat = sessionId => api.post('/system/session/heartbeat', { sessionId });
 export const logoutSystemSession = sessionId => api.post('/system/session/logout', { sessionId });
 export const getSystemStatus = () => api.get('/system/status');
+export const runSystemMaintenance = action => api.post('/system/maintenance', { action });
 export const getSystemVersion = () => api.get('/system/version');
 
 export default api;

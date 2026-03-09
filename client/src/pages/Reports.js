@@ -1,6 +1,6 @@
 // src/pages/Reports.js
 import React, { useEffect, useState } from 'react';
-import { Download, FileText, RefreshCw } from 'lucide-react';
+import { Download, FileText, Printer, RefreshCw } from 'lucide-react';
 import { getCallLogs } from '../utils/api';
 import { fmtDT, statusClass, stageClass, typeClass, bookingClass, checkClass } from '../utils/helpers';
 
@@ -41,6 +41,7 @@ export default function Reports() {
         </div>
         <div className="pg-actions">
           <button className="btn btn-secondary btn-sm btn-icon" onClick={load}><RefreshCw size={14}/></button>
+          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><Printer size={14}/> Print</button>
           <button className="btn btn-primary" onClick={exportCSV}><Download size={14}/> Export CSV</button>
         </div>
       </div>

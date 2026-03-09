@@ -32,15 +32,20 @@ export default function ContactList() {
   const [sp]          = useSearchParams();
   const [contacts,    setContacts]   = useState([]);
   const [loading,     setLoading]    = useState(true);
-  const [search,      setSearch]     = useState('');
+  const [search,      setSearch]     = useState(sp.get('search') || '');
   const [fStatus,     setFStatus]    = useState('');
-  const [fType,       setFType]      = useState('');
+  const [fType,       setFType]      = useState(sp.get('caller_type') || '');
   const [fStage,      setFStage]     = useState('');
   const [fPriority,   setFPriority]  = useState('');
   const [deleteId,    setDeleteId]   = useState(null);
   const [deleting,    setDeleting]   = useState(false);
   const [view,        setView]       = useState('table'); // table | kanban
   const overdue = sp.get('overdue') === 'true';
+
+  useEffect(() => {
+    setSearch(sp.get('search') || '');
+    setFType(sp.get('caller_type') || '');
+  }, [sp]);
 
   const load = useCallback(() => {
     setLoading(true);
