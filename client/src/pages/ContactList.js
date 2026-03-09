@@ -29,7 +29,7 @@ function QuickSelect({ value, options, onSave, colorFn }) {
 
 export default function ContactList() {
   const navigate      = useNavigate();
-  const [sp]          = useSearchParams();
+  const [sp, setSp]   = useSearchParams();
   const [contacts,    setContacts]   = useState([]);
   const [loading,     setLoading]    = useState(true);
   const [search,      setSearch]     = useState(sp.get('search') || '');
@@ -77,7 +77,39 @@ export default function ContactList() {
     finally { setDeleting(false); }
   }
 
-  const clearFilters = () => { setSearch(''); setFStatus(''); setFType(''); setFStage(''); setFPriority(''); };
+  function syncFiltersToUrl(nextState = {}) {
+    const nextParams = new URLSearchParams();
+    const nextSearch = (nextState.search ?? search).trim();
+    const nextType = nextState.fType ?? fType;
+    const nextStatus = nextState.fStatus ?? fStatus;
+    const nextStage = nextState.fStage ?? fStage;
+    const nextPriority = nextState.fPriority ?? fPriority;
+
+    if (nextSearch) nextParams.set('search', nextSearch);
+    if (nextType) nextParams.set('caller_type', nextType);
+    if (nextStatus) nextParams.set('status', nextStatus);
+    if (nextStage) nextParams.set('stage', nextStage);
+    if (nextPriority) nextParams.set('priority', nextPriority);
+    if (overdue) nextParams.set('overdue', 'true');
+    setSp(nextParams);
+  }
+
+  function handleSearchSubmit(event) {
+    event.preventDefault();
+    syncFiltersToUrl();
+    load();
+  }
+
+  const clearFilters = () => {
+    setSearch('');
+    setFStatus('');
+    setFType('');
+    setFStage('');
+    setFPriority('');
+    const nextParams = new URLSearchParams();
+    if (overdue) nextParams.set('overdue', 'true');
+    setSp(nextParams);
+  };
   const hasFilters   = search || fStatus || fType || fStage || fPriority;
 
   // Kanban grouping
@@ -99,20 +131,21 @@ export default function ContactList() {
       </div>
 
       <div className="toolbar">
-        <div className="search-wrap">
+        <form className="search-wrap" onSubmit={handleSearchSubmit}>
           <Search size={14} color="var(--txt3)" />
           <input placeholder="Search name, phone, email…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <select className="filter-sel" value={fType}     onChange={e => setFType(e.target.value)}>
+          <button type="submit" className="btn btn-primary btn-sm">Search</button>
+        </form>
+        <select className="filter-sel" value={fType}     onChange={e => { setFType(e.target.value); syncFiltersToUrl({ fType: e.target.value }); }}>
           <option value="">All Types</option>{CALLER_TYPES.map(t=><option key={t}>{t}</option>)}
         </select>
-        <select className="filter-sel" value={fStatus}   onChange={e => setFStatus(e.target.value)}>
+        <select className="filter-sel" value={fStatus}   onChange={e => { setFStatus(e.target.value); syncFiltersToUrl({ fStatus: e.target.value }); }}>
           <option value="">All Statuses</option>{STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}
         </select>
-        <select className="filter-sel" value={fStage}    onChange={e => setFStage(e.target.value)}>
+        <select className="filter-sel" value={fStage}    onChange={e => { setFStage(e.target.value); syncFiltersToUrl({ fStage: e.target.value }); }}>
           <option value="">All Stages</option>{STAGE_OPTIONS.map(s=><option key={s}>{s}</option>)}
         </select>
-        <select className="filter-sel" value={fPriority} onChange={e => setFPriority(e.target.value)}>
+        <select className="filter-sel" value={fPriority} onChange={e => { setFPriority(e.target.value); syncFiltersToUrl({ fPriority: e.target.value }); }}>
           <option value="">All Priorities</option>{PRIORITY_OPTIONS.map(p=><option key={p}>{p}</option>)}
         </select>
         {hasFilters && <button className="btn btn-ghost btn-sm" onClick={clearFilters}>✕ Clear</button>}

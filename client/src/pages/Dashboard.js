@@ -90,10 +90,10 @@ export default function Dashboard({ user }) {
 
         {/* KPIs */}
         <div className="kpi-grid" style={{ marginBottom: 20 }}>
-          <Kpi label="Total Contacts" value={t.total}       color="var(--txt)"     icon={Users}     trend={weekTrend} trendLabel={`${Math.abs(weekTrend)}% vs last week`} />
+          <Kpi label="Total Applicants" value={t.total}       color="var(--txt)"     icon={Users}     trend={weekTrend} trendLabel={`${Math.abs(weekTrend)}% vs last week`} />
           <Kpi label="Approved"       value={t.approved}    color="var(--green)"   icon={CheckCircle} sub={`${t.total ? Math.round((t.approved/t.total)*100) : 0}% of total`} />
           <Kpi label="Pending"        value={t.pending}     color="var(--orange)"  icon={Clock} />
-          <Kpi label="Drivers"        value={t.drivers}     color="var(--blue)"    icon={Car} />
+          <Kpi label="Driver Applicants" value={t.drivers}  color="var(--blue)"    icon={Car} />
           <Kpi label="In Training"    value={t.inTraining}  color="var(--purple)"  icon={TrendingUp} />
           <Kpi label="Interviews"     value={t.inInterview} color="var(--accent)"  icon={UserCheck} />
           <Kpi label="Booked"         value={t.booked}      color="var(--green)"   icon={PhoneCall} />

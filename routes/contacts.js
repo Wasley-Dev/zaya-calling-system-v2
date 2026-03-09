@@ -57,9 +57,17 @@ router.get('/', (req, res) => {
     const params = [];
 
     if (search) {
-      sql += ' AND (cl.First_Name LIKE ? OR cl.Last_Name LIKE ? OR cl.Mobile_Phone LIKE ? OR cl.E_mail_Address LIKE ? OR cl.Address LIKE ?)';
+      sql += ` AND (
+        cl.First_Name LIKE ?
+        OR cl.Last_Name LIKE ?
+        OR cl.Job_Title LIKE ?
+        OR cl.Mobile_Phone LIKE ?
+        OR cl.E_mail_Address LIKE ?
+        OR cl.Address LIKE ?
+        OR cl.Caller_Type LIKE ?
+      )`;
       const searchLike = `%${search}%`;
-      params.push(searchLike, searchLike, searchLike, searchLike, searchLike);
+      params.push(searchLike, searchLike, searchLike, searchLike, searchLike, searchLike, searchLike);
     }
     if (status) {
       sql += ' AND cl.Status = ?';
