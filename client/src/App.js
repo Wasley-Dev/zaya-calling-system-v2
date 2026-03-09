@@ -57,24 +57,41 @@ const REMEMBER_ME_KEY = 'zaya-remember-me';
 const THEME_KEY = 'zaya-theme';
 const ORIENTATION_KEY = 'zaya-ai-orientation-complete';
 const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com';
-const DEFAULT_LOGIN_IMAGE = 'https://images.pexels.com/photos/7869308/pexels-photo-7869308.jpeg?cs=srgb&dl=pexels-pavel-danilyuk-7869308.jpg&fm=jpg';
+const UTC_DAY_MS = 24 * 60 * 60 * 1000;
+const ROTATING_LOGIN_IMAGES = [
+  'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1600',
+  'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1600',
+  'https://images.pexels.com/photos/3861969/pexels-photo-3861969.jpeg?auto=compress&cs=tinysrgb&w=1600',
+  'https://images.pexels.com/photos/7654576/pexels-photo-7654576.jpeg?auto=compress&cs=tinysrgb&w=1600',
+];
+const DEFAULT_CORPORATE_FACTS = [
+  'Development velocity improves when teams document decisions once and reuse them everywhere.',
+  'Consistent follow-up habits drive more growth than last-minute bursts of activity.',
+  'Shared dashboards reduce status meetings and increase execution time.',
+  'Productivity scales when teams remove duplicate entry and standardize workflows.',
+  'Clear ownership shortens delivery cycles and improves operational quality.',
+  'Small process improvements compound into major output gains over a quarter.',
+  'Growth is easier to sustain when reporting, calling, and compliance stay in one system.',
+  'Strong internal tools reduce friction for both managers and frontline teams.',
+  'Reliable data makes development planning faster and commercial decisions safer.',
+  'Teams with fewer disconnected systems usually respond faster to new opportunities.',
+  'Operational discipline turns daily activity into measurable business momentum.',
+  'Better visibility helps leadership coach performance before bottlenecks grow.',
+];
+const POWERED_BADGE_TEXT = 'Powered and protected by WAS for Zaya Calling System';
 const DEFAULT_USER = { name: 'Zaya Operations', email: 'it@zayagroupltd.com', role: 'Super Admin' };
 const FALLBACK_SETTINGS = {
-  systemName: 'Zaya Group Calling System',
+  systemName: 'Zaya Calling System',
   systemTagline: 'Corporate Operations Workspace',
   welcomeMessage: 'Welcome back',
-  logoUrl: '/zaya-logo.png?v=20260309-1',
-  loginImage: DEFAULT_LOGIN_IMAGE,
+  logoUrl: '/zaya-logo.png?v=20260309-2',
+  loginImage: ROTATING_LOGIN_IMAGES.join('\n'),
   appBackgroundImage: '',
-  loginHeadline: 'Welcome back to the Zaya Group corporate workspace.',
-  loginCopy: 'Review live calling activity, manage users, and move candidate operations forward from one command layer.',
-  quote: 'Clear operations make growth easier to scale.',
-  quoteAuthor: 'Zaya Group Corporate Office',
-  facts: [
-    'Follow-up quality compounds faster than raw outreach volume.',
-    'Shared systems reduce commercial and compliance friction.',
-    'Fewer disconnected tools means faster team decisions.',
-  ],
+  loginHeadline: 'Operate one global calling workspace with daily corporate insights.',
+  loginCopy: 'Every installed Zaya system now presents a synchronized corporate visual and rotating operational facts so teams start from the same message every day.',
+  quote: 'Daily system clarity supports stronger development, growth, and productivity.',
+  quoteAuthor: 'WAS Corporate Systems',
+  facts: DEFAULT_CORPORATE_FACTS,
 };
 
 function normalizeSettings(settings) {
@@ -85,14 +102,33 @@ function normalizeSettings(settings) {
   };
 }
 
-function buildLoginVisualStyle(settings) {
-  const imageUrl = settings.loginImage || FALLBACK_SETTINGS.loginImage;
+function parseRotatingImages(value) {
+  const items = String(value || '')
+    .split(/\r?\n|,/)
+    .map(item => item.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(items));
+}
+
+function getUtcDayNumber(date = new Date()) {
+  return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / UTC_DAY_MS);
+}
+
+function getRotatingLoginExperience(settings) {
+  const imagePool = parseRotatingImages(settings.loginImage);
+  const facts = Array.isArray(settings.facts) && settings.facts.length ? settings.facts : DEFAULT_CORPORATE_FACTS;
+  const dayNumber = getUtcDayNumber();
+  const imageIndex = imagePool.length ? dayNumber % imagePool.length : 0;
+  const factStartIndex = facts.length ? dayNumber % facts.length : 0;
+  const visibleFacts = facts.length
+    ? Array.from({ length: Math.min(4, facts.length) }, (_, offset) => facts[(factStartIndex + offset) % facts.length])
+    : DEFAULT_CORPORATE_FACTS.slice(0, 4);
 
   return {
-    backgroundImage: `linear-gradient(135deg, rgba(9, 23, 42, 0.18), rgba(9, 23, 42, 0.58)), url(${imageUrl})`,
-    backgroundSize: 'cover, cover',
-    backgroundPosition: 'center, center',
-    backgroundRepeat: 'no-repeat',
+    imageUrl: imagePool[imageIndex] || ROTATING_LOGIN_IMAGES[dayNumber % ROTATING_LOGIN_IMAGES.length],
+    visibleFacts,
+    spotlightFact: visibleFacts[0] || DEFAULT_CORPORATE_FACTS[0],
   };
 }
 
@@ -168,6 +204,7 @@ function UpdateBanner({ updateInfo, onRefresh, syncInfo, onSyncNow }) {
 
 function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe, syncInfo, onSyncNow }) {
   const branding = normalizeSettings(settings);
+  const rotatingExperience = getRotatingLoginExperience(branding);
   const [email, setEmail] = useState(DEFAULT_USER.email);
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(initialRememberMe);
@@ -191,7 +228,15 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
   return (
     <div className="auth-shell auth-shell-enterprise">
       <div className="auth-frame">
-        <section className="login-visual-panel" style={buildLoginVisualStyle(branding)}>
+        <section
+          className="login-visual-panel"
+          style={{
+            backgroundImage: `linear-gradient(135deg, rgba(9, 23, 42, 0.18), rgba(9, 23, 42, 0.58)), url(${rotatingExperience.imageUrl})`,
+            backgroundSize: 'cover, cover',
+            backgroundPosition: 'center, center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
           <div className="login-visual-overlay">
             <div className="login-visual-top">
               <div className="login-brand-lockup">
@@ -203,8 +248,9 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
                   <div className="login-brand-subtitle">{branding.systemTagline}</div>
                 </div>
               </div>
+              <div className="login-powered-badge">{POWERED_BADGE_TEXT}</div>
               <div className="login-visual-copy">
-                <div className="hero-card-kicker">Corporate Operations Brief</div>
+                <div className="hero-card-kicker">Global Corporate Brief</div>
                 <h2>{branding.loginHeadline}</h2>
                 <p>{branding.loginCopy}</p>
               </div>
@@ -212,12 +258,12 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
             <div className="login-quote-card">
               <ShieldCheck size={18} />
               <div>
-                <div className="login-quote-text">{branding.quote}</div>
-                <div className="login-quote-author">{branding.quoteAuthor}</div>
+                <div className="login-quote-text">{rotatingExperience.spotlightFact}</div>
+                <div className="login-quote-author">{branding.quoteAuthor || branding.quote || 'WAS Corporate Systems'}</div>
               </div>
             </div>
             <div className="login-fact-list">
-              {branding.facts.map(fact => (
+              {rotatingExperience.visibleFacts.map(fact => (
                 <div key={fact} className="login-fact-item">
                   <span className="fact-dot" />
                   <span>{fact}</span>
@@ -768,8 +814,9 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                 <input className="form-input" value={draft.logoUrl} onChange={event => updateDraft('logoUrl', event.target.value)} />
               </div>
               <div className="form-group">
-                <label className="form-label">Login Background Image</label>
+                <label className="form-label">Login Background Images</label>
                 <input className="form-input" value={draft.loginImage} onChange={event => updateDraft('loginImage', event.target.value)} />
+                <div className="form-hint">Use one URL or multiple image URLs separated by commas or new lines. The login visual rotates globally every 24 hours using UTC.</div>
               </div>
               <div className="form-group">
                 <label className="form-label">System Background Image</label>
@@ -783,7 +830,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
               <div
                 className="admin-preview admin-preview-image"
                 style={{
-                  backgroundImage: `linear-gradient(180deg, rgba(4,13,35,0.56), rgba(4,13,35,0.78)), url(${draft.loginImage || FALLBACK_SETTINGS.loginImage})`,
+                  backgroundImage: `linear-gradient(180deg, rgba(4,13,35,0.56), rgba(4,13,35,0.78)), url(${getRotatingLoginExperience(draft).imageUrl})`,
                 }}
               >
                 <div className="login-brand-lockup">
@@ -798,6 +845,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                 <div className="admin-preview-copy">
                   <strong>{draft.loginHeadline || FALLBACK_SETTINGS.loginHeadline}</strong>
                   <p>{draft.loginCopy || FALLBACK_SETTINGS.loginCopy}</p>
+                  <div className="form-hint" style={{ marginTop: 10 }}>{POWERED_BADGE_TEXT}</div>
                 </div>
               </div>
             </div>
@@ -823,6 +871,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
               <div className="form-group">
                 <label className="form-label">Quote</label>
                 <textarea className="form-input" value={draft.quote} onChange={event => updateDraft('quote', event.target.value)} />
+                <div className="form-hint">This now supports the rotating spotlight caption beneath the daily login image.</div>
               </div>
               <div className="form-group">
                 <label className="form-label">Quote Author</label>
@@ -831,6 +880,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
               <div className="form-group">
                 <label className="form-label">Corporate Facts</label>
                 <textarea className="form-input" value={Array.isArray(draft.facts) ? draft.facts.join('\n') : ''} onChange={event => updateDraft('facts', event.target.value.split('\n'))} />
+                <div className="form-hint">These facts rotate globally every 24 hours and prioritize development, growth, and productivity themes.</div>
               </div>
               <button className="btn btn-primary" onClick={saveSettings} disabled={busy}>Save System Settings</button>
             </div>

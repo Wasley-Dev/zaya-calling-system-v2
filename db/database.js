@@ -6,19 +6,34 @@ const path = require('path');
 let db;
 const SYSTEM_ROLES = ['Super Admin', 'Admin', 'User'];
 const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com';
-const DEFAULT_LOGIN_IMAGE = 'https://images.pexels.com/photos/7869308/pexels-photo-7869308.jpeg?cs=srgb&dl=pexels-pavel-danilyuk-7869308.jpg&fm=jpg';
+const DEFAULT_ROTATING_LOGIN_IMAGES = [
+  'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1600',
+  'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1600',
+  'https://images.pexels.com/photos/3861969/pexels-photo-3861969.jpeg?auto=compress&cs=tinysrgb&w=1600',
+  'https://images.pexels.com/photos/7654576/pexels-photo-7654576.jpeg?auto=compress&cs=tinysrgb&w=1600',
+];
+const DEFAULT_CORPORATE_FACTS = [
+  'Development velocity improves when teams document decisions once and reuse them everywhere.',
+  'Consistent follow-up habits drive more growth than last-minute bursts of activity.',
+  'Shared dashboards reduce status meetings and increase execution time.',
+  'Productivity scales when teams remove duplicate entry and standardize workflows.',
+  'Clear ownership shortens delivery cycles and improves operational quality.',
+  'Small process improvements compound into major output gains over a quarter.',
+  'Growth is easier to sustain when reporting, calling, and compliance stay in one system.',
+  'Strong internal tools reduce friction for both managers and frontline teams.',
+];
 const DEFAULT_SYSTEM_SETTINGS = {
-  systemName: 'Zaya Group Calling System',
+  systemName: 'Zaya Calling System',
   systemTagline: 'Corporate Operations Workspace',
   welcomeMessage: 'Welcome back',
-  logoUrl: '/zaya-logo.png?v=20260309-1',
-  loginImage: DEFAULT_LOGIN_IMAGE,
+  logoUrl: '/zaya-logo.png?v=20260309-2',
+  loginImage: DEFAULT_ROTATING_LOGIN_IMAGES.join('\n'),
   appBackgroundImage: '',
-  loginHeadline: '',
-  loginCopy: '',
-  quote: '',
-  quoteAuthor: '',
-  facts: [],
+  loginHeadline: 'Operate one global calling workspace with daily corporate insights.',
+  loginCopy: 'Every installed Zaya system now presents a synchronized corporate visual and rotating operational facts so teams start from the same message every day.',
+  quote: 'Daily system clarity supports stronger development, growth, and productivity.',
+  quoteAuthor: 'WAS Corporate Systems',
+  facts: DEFAULT_CORPORATE_FACTS,
 };
 
 function getStoragePaths() {
@@ -264,7 +279,7 @@ function initializeSchema() {
         Updated_At = CURRENT_TIMESTAMP
     WHERE Setting_Key = 'loginImage'
       AND (Setting_Value = '' OR Setting_Value = '/login-visual.jpg?v=20260309-1')
-  `).run(DEFAULT_LOGIN_IMAGE);
+  `).run(DEFAULT_ROTATING_LOGIN_IMAGES.join('\n'));
 
   const count = database.prepare('SELECT COUNT(*) as c FROM CallLogs').get();
   if (count.c === 0) seedData();
