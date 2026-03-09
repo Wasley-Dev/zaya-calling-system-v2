@@ -58,10 +58,10 @@ const THEME_KEY = 'zaya-theme';
 const ORIENTATION_KEY = 'zaya-ai-orientation-complete';
 const DEFAULT_USER = { name: 'Zaya Operations', email: 'it@zayagroupltd.com', role: 'Super Admin' };
 const FALLBACK_SETTINGS = {
-  systemName: 'ZRP Calling System',
+  systemName: 'Zaya Group Calling System ZGC System',
   systemTagline: 'Corporate Operations Workspace',
   welcomeMessage: 'Welcome back',
-  logoUrl: '/zaya-logo.png?v=20260306-2',
+  logoUrl: '/zaya-logo.png?v=20260309-1',
   loginImage: '',
   appBackgroundImage: '',
   loginHeadline: 'Welcome back to the ZRP corporate workspace.',
@@ -80,6 +80,20 @@ function normalizeSettings(settings) {
     ...FALLBACK_SETTINGS,
     ...(settings || {}),
     facts: Array.isArray(settings?.facts) && settings.facts.length ? settings.facts : FALLBACK_SETTINGS.facts,
+  };
+}
+
+function buildLoginVisualStyle(settings) {
+  const logoUrl = settings.logoUrl || FALLBACK_SETTINGS.logoUrl;
+  const hasLoginImage = Boolean(settings.loginImage);
+
+  return {
+    backgroundImage: hasLoginImage
+      ? `linear-gradient(135deg, rgba(9, 23, 42, 0.18), rgba(9, 23, 42, 0.58)), url(${settings.loginImage}), url(${logoUrl})`
+      : `linear-gradient(135deg, rgba(9, 23, 42, 0.18), rgba(9, 23, 42, 0.58)), url(${logoUrl})`,
+    backgroundSize: hasLoginImage ? 'cover, cover, min(72%, 540px)' : 'cover, min(72%, 540px)',
+    backgroundPosition: hasLoginImage ? 'center, center, center 82%' : 'center, center 82%',
+    backgroundRepeat: 'no-repeat',
   };
 }
 
@@ -169,7 +183,7 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
   return (
     <div className="auth-shell auth-shell-enterprise">
       <div className="auth-frame">
-        <section className="login-visual-panel" style={branding.loginImage ? { backgroundImage: `url(${branding.loginImage})` } : undefined}>
+        <section className="login-visual-panel" style={buildLoginVisualStyle(branding)}>
           <div className="login-visual-overlay">
             <div className="login-brand-lockup">
               <div className="login-brand-mark">
@@ -690,7 +704,16 @@ function AdminConsole({ user, settings, onSaveSettings }) {
 
             <div className="card">
               <div className="card-title">Preview</div>
-              <div className="admin-preview" style={draft.appBackgroundImage ? { backgroundImage: `linear-gradient(180deg, rgba(4,13,35,0.88), rgba(4,13,35,0.94)), url(${draft.appBackgroundImage})` } : undefined}>
+              <div
+                className="admin-preview admin-preview-image"
+                style={draft.loginImage
+                  ? {
+                      backgroundImage: `linear-gradient(180deg, rgba(4,13,35,0.56), rgba(4,13,35,0.78)), url(${draft.loginImage}), url(${draft.logoUrl || FALLBACK_SETTINGS.logoUrl})`,
+                    }
+                  : {
+                      backgroundImage: `linear-gradient(180deg, rgba(4,13,35,0.56), rgba(4,13,35,0.78)), url(${draft.logoUrl || FALLBACK_SETTINGS.logoUrl})`,
+                    }}
+              >
                 <div className="login-brand-lockup">
                   <div className="login-brand-mark">
                     <img src={draft.logoUrl || FALLBACK_SETTINGS.logoUrl} alt={draft.systemName} className="login-brand-image" />

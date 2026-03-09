@@ -6,10 +6,10 @@ const path = require('path');
 let db;
 const SYSTEM_ROLES = ['Super Admin', 'Admin', 'User'];
 const DEFAULT_SYSTEM_SETTINGS = {
-  systemName: 'ZRP Calling System',
+  systemName: 'Zaya Group Calling System ZGC System',
   systemTagline: 'Corporate Operations Workspace',
   welcomeMessage: 'Welcome back',
-  logoUrl: '/zaya-logo.png?v=20260306-2',
+  logoUrl: '/zaya-logo.png?v=20260309-1',
   loginImage: '',
   appBackgroundImage: '',
   loginHeadline: '',

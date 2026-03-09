@@ -996,10 +996,32 @@ body {
     linear-gradient(180deg, rgba(7, 19, 32, 0.34) 0%, rgba(7, 19, 32, 0.58) 52%, rgba(7, 19, 32, 0.78) 100%);
   color: #f5fbf8;
 }
+.login-visual-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(116deg, transparent 18%, rgba(255, 241, 196, 0.14) 34%, transparent 48%),
+    linear-gradient(125deg, transparent 40%, rgba(255, 255, 255, 0.09) 54%, transparent 68%),
+    linear-gradient(136deg, transparent 62%, rgba(224, 184, 95, 0.12) 74%, transparent 84%);
+  mix-blend-mode: screen;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.login-visual-overlay > * {
+  position: relative;
+  z-index: 1;
+}
 body[data-theme='light'] .login-visual-overlay {
   background:
     linear-gradient(180deg, rgba(115, 86, 33, 0.16) 0%, rgba(72, 73, 92, 0.26) 50%, rgba(41, 49, 62, 0.44) 100%);
   color: #ffffff;
+}
+body[data-theme='light'] .login-visual-overlay::before {
+  background:
+    linear-gradient(116deg, transparent 18%, rgba(255, 255, 255, 0.18) 34%, transparent 48%),
+    linear-gradient(125deg, transparent 40%, rgba(224, 184, 95, 0.1) 54%, transparent 68%),
+    linear-gradient(136deg, transparent 62%, rgba(255, 255, 255, 0.14) 74%, transparent 84%);
 }
 .login-brand-lockup {
   display: inline-flex;
@@ -1250,10 +1272,26 @@ body[data-theme='light'] .login-visual-overlay {
   min-height: 280px;
   border-radius: 22px;
   background-size: cover;
-  background-position: center;
+  background-position: center, center, center 82%;
+  background-repeat: no-repeat;
   padding: 18px;
   display: flex;
   align-items: flex-start;
+  position: relative;
+  overflow: hidden;
+}
+.admin-preview-image::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(118deg, transparent 16%, rgba(255, 240, 203, 0.12) 34%, transparent 46%),
+    linear-gradient(128deg, transparent 52%, rgba(255, 255, 255, 0.08) 64%, transparent 76%);
+  pointer-events: none;
+}
+.admin-preview-image > * {
+  position: relative;
+  z-index: 1;
 }
 .admin-preview-copy {
   padding: 16px;
