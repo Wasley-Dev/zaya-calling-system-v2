@@ -62,7 +62,7 @@ const FALLBACK_SETTINGS = {
   systemTagline: 'Corporate Operations Workspace',
   welcomeMessage: 'Welcome back',
   logoUrl: '/zaya-logo.png?v=20260309-1',
-  loginImage: '',
+  loginImage: '/login-visual.jpg?v=20260309-1',
   appBackgroundImage: '',
   loginHeadline: 'Welcome back to the ZRP corporate workspace.',
   loginCopy: 'Review live calling activity, manage users, and move candidate operations forward from one command layer.',
@@ -84,15 +84,12 @@ function normalizeSettings(settings) {
 }
 
 function buildLoginVisualStyle(settings) {
-  const logoUrl = settings.logoUrl || FALLBACK_SETTINGS.logoUrl;
-  const hasLoginImage = Boolean(settings.loginImage);
+  const imageUrl = settings.loginImage || FALLBACK_SETTINGS.loginImage;
 
   return {
-    backgroundImage: hasLoginImage
-      ? `linear-gradient(135deg, rgba(9, 23, 42, 0.18), rgba(9, 23, 42, 0.58)), url(${settings.loginImage}), url(${logoUrl})`
-      : `linear-gradient(135deg, rgba(9, 23, 42, 0.18), rgba(9, 23, 42, 0.58)), url(${logoUrl})`,
-    backgroundSize: hasLoginImage ? 'cover, cover, min(72%, 540px)' : 'cover, min(72%, 540px)',
-    backgroundPosition: hasLoginImage ? 'center, center, center 82%' : 'center, center 82%',
+    backgroundImage: `linear-gradient(135deg, rgba(9, 23, 42, 0.18), rgba(9, 23, 42, 0.58)), url(${imageUrl})`,
+    backgroundSize: 'cover, cover',
+    backgroundPosition: 'center, center',
     backgroundRepeat: 'no-repeat',
   };
 }
@@ -706,13 +703,9 @@ function AdminConsole({ user, settings, onSaveSettings }) {
               <div className="card-title">Preview</div>
               <div
                 className="admin-preview admin-preview-image"
-                style={draft.loginImage
-                  ? {
-                      backgroundImage: `linear-gradient(180deg, rgba(4,13,35,0.56), rgba(4,13,35,0.78)), url(${draft.loginImage}), url(${draft.logoUrl || FALLBACK_SETTINGS.logoUrl})`,
-                    }
-                  : {
-                      backgroundImage: `linear-gradient(180deg, rgba(4,13,35,0.56), rgba(4,13,35,0.78)), url(${draft.logoUrl || FALLBACK_SETTINGS.logoUrl})`,
-                    }}
+                style={{
+                  backgroundImage: `linear-gradient(180deg, rgba(4,13,35,0.56), rgba(4,13,35,0.78)), url(${draft.loginImage || FALLBACK_SETTINGS.loginImage})`,
+                }}
               >
                 <div className="login-brand-lockup">
                   <div className="login-brand-mark">

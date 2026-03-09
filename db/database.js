@@ -10,7 +10,7 @@ const DEFAULT_SYSTEM_SETTINGS = {
   systemTagline: 'Corporate Operations Workspace',
   welcomeMessage: 'Welcome back',
   logoUrl: '/zaya-logo.png?v=20260309-1',
-  loginImage: '',
+  loginImage: '/login-visual.jpg?v=20260309-1',
   appBackgroundImage: '',
   loginHeadline: '',
   loginCopy: '',

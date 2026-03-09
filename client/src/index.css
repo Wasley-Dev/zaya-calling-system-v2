@@ -1272,7 +1272,7 @@ body[data-theme='light'] .login-visual-overlay::before {
   min-height: 280px;
   border-radius: 22px;
   background-size: cover;
-  background-position: center, center, center 82%;
+  background-position: center;
   background-repeat: no-repeat;
   padding: 18px;
   display: flex;
