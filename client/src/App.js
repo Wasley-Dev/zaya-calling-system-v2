@@ -193,19 +193,21 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
       <div className="auth-frame">
         <section className="login-visual-panel" style={buildLoginVisualStyle(branding)}>
           <div className="login-visual-overlay">
-            <div className="login-brand-lockup">
-              <div className="login-brand-mark">
-                <img src={branding.logoUrl || FALLBACK_SETTINGS.logoUrl} alt={`${branding.systemName} logo`} className="login-brand-image" />
+            <div className="login-visual-top">
+              <div className="login-brand-lockup">
+                <div className="login-brand-mark">
+                  <img src={branding.logoUrl || FALLBACK_SETTINGS.logoUrl} alt={`${branding.systemName} logo`} className="login-brand-image" />
+                </div>
+                <div>
+                  <div className="login-brand-title">{branding.systemName}</div>
+                  <div className="login-brand-subtitle">{branding.systemTagline}</div>
+                </div>
               </div>
-              <div>
-                <div className="login-brand-title">{branding.systemName}</div>
-                <div className="login-brand-subtitle">{branding.systemTagline}</div>
+              <div className="login-visual-copy">
+                <div className="hero-card-kicker">Corporate Operations Brief</div>
+                <h2>{branding.loginHeadline}</h2>
+                <p>{branding.loginCopy}</p>
               </div>
-            </div>
-            <div className="login-visual-copy">
-              <div className="hero-card-kicker">Corporate Operations Brief</div>
-              <h2>{branding.loginHeadline}</h2>
-              <p>{branding.loginCopy}</p>
             </div>
             <div className="login-quote-card">
               <ShieldCheck size={18} />

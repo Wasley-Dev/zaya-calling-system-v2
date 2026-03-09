@@ -989,9 +989,9 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 22px;
-  padding: 32px;
+  justify-content: flex-end;
+  gap: 24px;
+  padding: 32px 32px 36px;
   background:
     linear-gradient(180deg, rgba(7, 19, 32, 0.34) 0%, rgba(7, 19, 32, 0.58) 52%, rgba(7, 19, 32, 0.78) 100%);
   color: #f5fbf8;
@@ -1023,15 +1023,24 @@ body[data-theme='light'] .login-visual-overlay::before {
     linear-gradient(125deg, transparent 40%, rgba(224, 184, 95, 0.1) 54%, transparent 68%),
     linear-gradient(136deg, transparent 62%, rgba(255, 255, 255, 0.14) 74%, transparent 84%);
 }
+body[data-theme='light'] .login-quote-card {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255,255,255,0.34);
+}
 .login-brand-lockup {
   display: inline-flex;
   align-items: center;
   gap: 18px;
 }
+.login-visual-top {
+  display: grid;
+  gap: 26px;
+  max-width: 620px;
+}
 .login-brand-mark {
-  width: 168px;
-  min-width: 168px;
-  height: 168px;
+  width: 148px;
+  min-width: 148px;
+  height: 148px;
   border-radius: 28px;
   background: rgba(255,255,255,0.96);
   display: grid;
@@ -1046,62 +1055,65 @@ body[data-theme='light'] .login-visual-overlay::before {
   object-fit: contain;
 }
 .login-brand-title {
-  font-size: 24px;
+  font-size: 28px;
+  font-weight: 800;
   color: #ffffff;
   margin-bottom: 2px;
 }
 .login-brand-subtitle {
-  font-size: 13px;
+  font-size: 15px;
   color: rgba(245, 251, 248, 0.88);
 }
 .login-visual-copy {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   align-content: start;
-  max-width: 560px;
+  max-width: 540px;
 }
 .login-visual-copy h2 {
-  margin: 2px 0 0;
+  margin: 0;
   font-family: var(--display);
-  font-size: clamp(36px, 4.6vw, 58px);
-  line-height: 1.01;
-  max-width: 11.5ch;
-  text-wrap: balance;
+  font-size: clamp(44px, 5vw, 72px);
+  line-height: 0.95;
+  max-width: 8.2ch;
+  letter-spacing: -1.2px;
 }
 .login-visual-copy p {
-  max-width: 42ch;
+  max-width: 34ch;
   color: rgba(245, 251, 248, 0.88);
-  font-size: 15px;
-  line-height: 1.68;
+  font-size: 16px;
+  line-height: 1.7;
 }
 .login-quote-card {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 14px 16px;
-  border-radius: 18px;
+  padding: 16px 18px;
+  border-radius: 20px;
   border: 1px solid rgba(255,255,255,0.24);
-  background: rgba(6, 24, 30, 0.48);
+  background: rgba(6, 24, 30, 0.4);
+  backdrop-filter: blur(10px);
 }
 .login-quote-text {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.45;
 }
 .login-quote-author {
   margin-top: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(245, 251, 248, 0.76);
 }
 .login-fact-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  margin-top: 4px;
 }
 .login-fact-item {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
-  font-size: 12.5px;
+  font-size: 13px;
   color: rgba(245, 251, 248, 0.88);
 }
 .fact-dot {
