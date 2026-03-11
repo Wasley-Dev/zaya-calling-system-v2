@@ -930,7 +930,7 @@ body {
 }
 
 .auth-shell-enterprise {
-  padding: 32px;
+  padding: 24px;
   background: var(--bg);
 }
 .auth-frame {
@@ -1086,16 +1086,16 @@ body[data-theme='light'] .login-quote-card {
 .login-visual-copy h2 {
   margin: 0;
   font-family: var(--display);
-  font-size: clamp(44px, 5vw, 72px);
-  line-height: 0.95;
-  max-width: 8.2ch;
+  font-size: clamp(36px, 4.6vw, 58px);
+  line-height: 1.01;
+  max-width: 11.5ch;
   letter-spacing: -1.2px;
 }
 .login-visual-copy p {
-  max-width: 34ch;
+  max-width: 42ch;
   color: rgba(245, 251, 248, 0.88);
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.68;
 }
 .login-quote-card {
   display: flex;
@@ -1104,8 +1104,9 @@ body[data-theme='light'] .login-quote-card {
   padding: 16px 18px;
   border-radius: 20px;
   border: 1px solid rgba(255,255,255,0.24);
-  background: rgba(6, 24, 30, 0.4);
+  background: rgba(6, 24, 30, 0.46);
   backdrop-filter: blur(10px);
+  max-width: 560px;
 }
 .login-quote-text {
   font-size: 15px;
@@ -1121,6 +1122,7 @@ body[data-theme='light'] .login-quote-card {
   display: grid;
   gap: 12px;
   margin-top: 4px;
+  max-width: 560px;
 }
 .login-fact-item {
   display: flex;
@@ -1144,7 +1146,7 @@ body[data-theme='light'] .login-quote-card {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 56px 48px;
+  padding: 56px 48px 56px 46px;
 }
 .auth-panel-enterprise .auth-kicker {
   width: fit-content;
@@ -1154,7 +1156,7 @@ body[data-theme='light'] .login-quote-card {
 .auth-heading-block {
   display: grid;
   gap: 12px;
-  margin: 18px 0 14px;
+  margin: 18px 0 16px;
   max-width: 420px;
 }
 .auth-panel-enterprise h2 {
@@ -1176,7 +1178,7 @@ body[data-theme='light'] .login-quote-card {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 4px 0 10px;
+  margin: 6px 0 12px;
   color: var(--txt2);
   font-size: 12.5px;
   font-weight: 600;
@@ -1354,6 +1356,7 @@ body[data-theme='light'] .login-quote-card {
 
   .auth-frame {
     min-height: auto;
+    grid-template-columns: 1fr;
   }
 
   .login-visual-overlay,

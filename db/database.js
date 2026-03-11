@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 let db;
@@ -24,15 +25,15 @@ const DEFAULT_CORPORATE_FACTS = [
 ];
 const DEFAULT_SYSTEM_SETTINGS = {
   systemName: 'Zaya Calling System',
-  systemTagline: 'Corporate Operations Workspace',
+  systemTagline: 'Enterprise operations workspace',
   welcomeMessage: 'Welcome back',
   logoUrl: '/zaya-logo.png?v=20260309-2',
   loginImage: DEFAULT_ROTATING_LOGIN_IMAGES.join('\n'),
   appBackgroundImage: '',
-  loginHeadline: 'Operate one global calling workspace with daily corporate insights.',
-  loginCopy: 'Every installed Zaya system now presents a synchronized corporate visual and rotating operational facts so teams start from the same message every day.',
-  quote: 'Daily system clarity supports stronger development, growth, and productivity.',
-  quoteAuthor: 'WAS Corporate Systems',
+  loginHeadline: "Enter with today's business-development focus.",
+  loginCopy: 'Use the workspace to convert follow-up clarity into pipeline movement and stronger execution.',
+  quote: 'Growth becomes predictable when every interaction leaves the client with less uncertainty than before.',
+  quoteAuthor: 'Enterprise Strategy Note',
   facts: DEFAULT_CORPORATE_FACTS,
 };
 
@@ -53,11 +54,35 @@ function ensureDir(dirPath) {
   }
 }
 
+function getSafeStoragePaths() {
+  const rootDir = process.env.VERCEL ? path.join(os.tmpdir(), 'zaya-runtime') : process.cwd();
+  const dataDir = path.join(rootDir, 'data');
+  const backupsDir = path.join(rootDir, 'backups');
+  return {
+    dbPath: path.join(dataDir, 'zaya.db'),
+    dataDir,
+    backupsDir,
+  };
+}
+
 function ensureStorageDirs() {
-  const paths = getStoragePaths();
-  ensureDir(paths.dataDir);
-  ensureDir(paths.backupsDir);
-  return paths;
+  const primaryPaths = getStoragePaths();
+
+  try {
+    ensureDir(path.dirname(primaryPaths.dbPath));
+    ensureDir(primaryPaths.dataDir);
+    ensureDir(primaryPaths.backupsDir);
+    return primaryPaths;
+  } catch (_) {
+    const fallbackPaths = getSafeStoragePaths();
+    ensureDir(path.dirname(fallbackPaths.dbPath));
+    ensureDir(fallbackPaths.dataDir);
+    ensureDir(fallbackPaths.backupsDir);
+    process.env.DB_PATH = fallbackPaths.dbPath;
+    process.env.DATA_DIR = fallbackPaths.dataDir;
+    process.env.BACKUPS_DIR = fallbackPaths.backupsDir;
+    return fallbackPaths;
+  }
 }
 
 function normalizeEmail(value) {
@@ -280,6 +305,48 @@ function initializeSchema() {
     WHERE Setting_Key = 'loginImage'
       AND (Setting_Value = '' OR Setting_Value = '/login-visual.jpg?v=20260309-1')
   `).run(DEFAULT_ROTATING_LOGIN_IMAGES.join('\n'));
+  database.prepare(`
+    UPDATE SystemSettings
+    SET Setting_Value = ?,
+        Updated_At = CURRENT_TIMESTAMP
+    WHERE Setting_Key = 'systemTagline'
+      AND (Setting_Value = '' OR Setting_Value = 'Corporate Operations Workspace')
+  `).run(DEFAULT_SYSTEM_SETTINGS.systemTagline);
+  database.prepare(`
+    UPDATE SystemSettings
+    SET Setting_Value = ?,
+        Updated_At = CURRENT_TIMESTAMP
+    WHERE Setting_Key = 'loginHeadline'
+      AND (Setting_Value = '' OR Setting_Value = 'Operate one global calling workspace with daily corporate insights.')
+  `).run(DEFAULT_SYSTEM_SETTINGS.loginHeadline);
+  database.prepare(`
+    UPDATE SystemSettings
+    SET Setting_Value = ?,
+        Updated_At = CURRENT_TIMESTAMP
+    WHERE Setting_Key = 'loginCopy'
+      AND (Setting_Value = '' OR Setting_Value = 'Every installed Zaya system now presents a synchronized corporate visual and rotating operational facts so teams start from the same message every day.')
+  `).run(DEFAULT_SYSTEM_SETTINGS.loginCopy);
+  database.prepare(`
+    UPDATE SystemSettings
+    SET Setting_Value = ?,
+        Updated_At = CURRENT_TIMESTAMP
+    WHERE Setting_Key = 'quote'
+      AND (Setting_Value = '' OR Setting_Value = 'Daily system clarity supports stronger development, growth, and productivity.')
+  `).run(DEFAULT_SYSTEM_SETTINGS.quote);
+  database.prepare(`
+    UPDATE SystemSettings
+    SET Setting_Value = ?,
+        Updated_At = CURRENT_TIMESTAMP
+    WHERE Setting_Key = 'quoteAuthor'
+      AND (Setting_Value = '' OR Setting_Value = 'WAS Corporate Systems')
+  `).run(DEFAULT_SYSTEM_SETTINGS.quoteAuthor);
+  database.prepare(`
+    UPDATE SystemSettings
+    SET Setting_Value = ?,
+        Updated_At = CURRENT_TIMESTAMP
+    WHERE Setting_Key = 'facts'
+      AND (Setting_Value = '[]' OR Setting_Value = '["Development velocity improves when teams document decisions once and reuse them everywhere.","Consistent follow-up habits drive more growth than last-minute bursts of activity.","Shared dashboards reduce status meetings and increase execution time.","Productivity scales when teams remove duplicate entry and standardize workflows.","Clear ownership shortens delivery cycles and improves operational quality.","Small process improvements compound into major output gains over a quarter.","Growth is easier to sustain when reporting, calling, and compliance stay in one system.","Strong internal tools reduce friction for both managers and frontline teams."]')
+  `).run(JSON.stringify(DEFAULT_SYSTEM_SETTINGS.facts));
 
   const count = database.prepare('SELECT COUNT(*) as c FROM CallLogs').get();
   if (count.c === 0) seedData();

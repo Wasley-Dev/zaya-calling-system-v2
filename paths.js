@@ -1,4 +1,5 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 function resolveWithinRoot(targetPath, rootPath) {
@@ -10,6 +11,20 @@ function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
   }
+}
+
+function getFallbackRuntimePaths({ projectRoot = __dirname } = {}) {
+  const rootDir = process.env.VERCEL ? path.join(os.tmpdir(), 'zaya-runtime') : projectRoot;
+  const dataDir = path.join(rootDir, 'data');
+  const uploadsDir = path.join(rootDir, 'uploads');
+  const backupsDir = path.join(rootDir, 'backups');
+
+  return {
+    dataDir,
+    uploadsDir,
+    backupsDir,
+    dbPath: path.join(dataDir, 'zaya.db'),
+  };
 }
 
 function getRuntimePaths({ projectRoot = __dirname, runtimeRoot = projectRoot } = {}) {
@@ -25,9 +40,27 @@ function getRuntimePaths({ projectRoot = __dirname, runtimeRoot = projectRoot } 
   const dbPath = resolveWithinRoot(process.env.DB_PATH, resolvedRuntimeRoot) || path.join(dataDir, 'zaya.db');
   const buildDir = path.join(projectRoot, 'client', 'build');
 
-  ensureDir(dataDir);
-  ensureDir(uploadsDir);
-  ensureDir(backupsDir);
+  try {
+    ensureDir(path.dirname(dbPath));
+    ensureDir(dataDir);
+    ensureDir(uploadsDir);
+    ensureDir(backupsDir);
+  } catch (_) {
+    const fallback = getFallbackRuntimePaths({ projectRoot });
+    ensureDir(path.dirname(fallback.dbPath));
+    ensureDir(fallback.dataDir);
+    ensureDir(fallback.uploadsDir);
+    ensureDir(fallback.backupsDir);
+    return {
+      projectRoot: path.resolve(projectRoot),
+      runtimeRoot: resolvedRuntimeRoot,
+      dataDir: fallback.dataDir,
+      uploadsDir: fallback.uploadsDir,
+      backupsDir: fallback.backupsDir,
+      dbPath: fallback.dbPath,
+      buildDir,
+    };
+  }
 
   return {
     projectRoot: path.resolve(projectRoot),

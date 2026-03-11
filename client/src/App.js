@@ -59,38 +59,26 @@ const ORIENTATION_KEY = 'zaya-ai-orientation-complete';
 const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com';
 const UTC_DAY_MS = 24 * 60 * 60 * 1000;
 const ROTATING_LOGIN_IMAGES = [
-  'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1600',
-  'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1600',
-  'https://images.pexels.com/photos/3861969/pexels-photo-3861969.jpeg?auto=compress&cs=tinysrgb&w=1600',
-  'https://images.pexels.com/photos/7654576/pexels-photo-7654576.jpeg?auto=compress&cs=tinysrgb&w=1600',
+  '/login-visual.jpg?v=20260309-2',
 ];
 const DEFAULT_CORPORATE_FACTS = [
-  'Development velocity improves when teams document decisions once and reuse them everywhere.',
-  'Consistent follow-up habits drive more growth than last-minute bursts of activity.',
-  'Shared dashboards reduce status meetings and increase execution time.',
-  'Productivity scales when teams remove duplicate entry and standardize workflows.',
-  'Clear ownership shortens delivery cycles and improves operational quality.',
-  'Small process improvements compound into major output gains over a quarter.',
-  'Growth is easier to sustain when reporting, calling, and compliance stay in one system.',
-  'Strong internal tools reduce friction for both managers and frontline teams.',
-  'Reliable data makes development planning faster and commercial decisions safer.',
-  'Teams with fewer disconnected systems usually respond faster to new opportunities.',
-  'Operational discipline turns daily activity into measurable business momentum.',
-  'Better visibility helps leadership coach performance before bottlenecks grow.',
+  'Sales velocity improves when handoffs between sourcing, calling, and compliance are explicit.',
+  'Most stalled deals are process problems before they become people problems.',
+  'Teams that measure next-action quality usually outperform teams that only measure volume.',
 ];
 const POWERED_BADGE_TEXT = 'Powered and protected by WAS for Zaya Calling System';
 const DEFAULT_USER = { name: 'Zaya Operations', email: 'it@zayagroupltd.com', role: 'Super Admin' };
 const FALLBACK_SETTINGS = {
   systemName: 'Zaya Calling System',
-  systemTagline: 'Corporate Operations Workspace',
+  systemTagline: 'Enterprise operations workspace',
   welcomeMessage: 'Welcome back',
   logoUrl: '/zaya-logo.png?v=20260309-2',
   loginImage: ROTATING_LOGIN_IMAGES.join('\n'),
   appBackgroundImage: '',
-  loginHeadline: 'Operate one global calling workspace with daily corporate insights.',
-  loginCopy: 'Every installed Zaya system now presents a synchronized corporate visual and rotating operational facts so teams start from the same message every day.',
-  quote: 'Daily system clarity supports stronger development, growth, and productivity.',
-  quoteAuthor: 'WAS Corporate Systems',
+  loginHeadline: "Enter with today's business-development focus.",
+  loginCopy: 'Use the workspace to convert follow-up clarity into pipeline movement and stronger execution.',
+  quote: 'Growth becomes predictable when every interaction leaves the client with less uncertainty than before.',
+  quoteAuthor: 'Enterprise Strategy Note',
   facts: DEFAULT_CORPORATE_FACTS,
 };
 
@@ -120,15 +108,11 @@ function getRotatingLoginExperience(settings) {
   const facts = Array.isArray(settings.facts) && settings.facts.length ? settings.facts : DEFAULT_CORPORATE_FACTS;
   const dayNumber = getUtcDayNumber();
   const imageIndex = imagePool.length ? dayNumber % imagePool.length : 0;
-  const factStartIndex = facts.length ? dayNumber % facts.length : 0;
-  const visibleFacts = facts.length
-    ? Array.from({ length: Math.min(4, facts.length) }, (_, offset) => facts[(factStartIndex + offset) % facts.length])
-    : DEFAULT_CORPORATE_FACTS.slice(0, 4);
+  const visibleFacts = facts.length ? facts.slice(0, 3) : DEFAULT_CORPORATE_FACTS;
 
   return {
     imageUrl: imagePool[imageIndex] || ROTATING_LOGIN_IMAGES[dayNumber % ROTATING_LOGIN_IMAGES.length],
     visibleFacts,
-    spotlightFact: visibleFacts[0] || DEFAULT_CORPORATE_FACTS[0],
   };
 }
 
@@ -250,7 +234,7 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
               </div>
               <div className="login-powered-badge">{POWERED_BADGE_TEXT}</div>
               <div className="login-visual-copy">
-                <div className="hero-card-kicker">Global Corporate Brief</div>
+                <div className="hero-card-kicker">Daily Business Development Brief</div>
                 <h2>{branding.loginHeadline}</h2>
                 <p>{branding.loginCopy}</p>
               </div>
@@ -258,7 +242,7 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
             <div className="login-quote-card">
               <ShieldCheck size={18} />
               <div>
-                <div className="login-quote-text">{rotatingExperience.spotlightFact}</div>
+                <div className="login-quote-text">{branding.quote}</div>
                 <div className="login-quote-author">{branding.quoteAuthor || branding.quote || 'WAS Corporate Systems'}</div>
               </div>
             </div>
@@ -971,13 +955,13 @@ function Sidebar({ alerts, roleGroups, settings, theme, onToggleTheme, user, onL
   const loc = useLocation();
   const nav = useNavigate();
   const [rolesOpen, setRolesOpen] = useState(false);
+  const canAccessAdminConsole = user.role === 'Super Admin';
   const items = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     { icon: Users, label: 'Contacts', path: '/contacts' },
     { icon: Car, label: 'Drivers', path: '/drivers', badge: alerts.expiring > 0 ? alerts.expiring : null },
     { icon: FileText, label: 'Reports', path: '/reports' },
   ];
-  if (user.role === 'Super Admin' || user.role === 'Admin') items.push({ icon: Settings2, label: 'Admin Console', path: '/admin' });
 
   return (
     <aside className="sidebar">
@@ -1046,6 +1030,14 @@ function Sidebar({ alerts, roleGroups, settings, theme, onToggleTheme, user, onL
           <strong>{user.role}</strong>
           <span>{user.role === 'Super Admin' ? 'Full system authority' : user.role === 'Admin' ? 'User and workflow control' : 'Operational workspace access'}</span>
         </div>
+
+        {canAccessAdminConsole ? (
+          <button className={`nav-item${loc.pathname.startsWith('/admin') ? ' active' : ''}`} onClick={() => nav('/admin')}>
+            <Settings2 size={16} />
+            Admin Console
+            {loc.pathname.startsWith('/admin') ? <ChevronRight size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} /> : null}
+          </button>
+        ) : null}
       </nav>
 
       <div className="sb-controls">
@@ -1123,7 +1115,7 @@ function Shell({ user, settings, theme, onToggleTheme, onLogout, onSaveSettings,
             <Route path="/drivers" element={<Drivers />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/profile" element={<ProfilePage user={user} onUpdateUser={onUpdateUser} />} />
-            <Route path="/admin" element={user.role === 'Super Admin' || user.role === 'Admin' ? <AdminConsole user={user} settings={settings} onSaveSettings={onSaveSettings} /> : <Navigate to="/" replace />} />
+            <Route path="/admin" element={user.role === 'Super Admin' ? <AdminConsole user={user} settings={settings} onSaveSettings={onSaveSettings} /> : <Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

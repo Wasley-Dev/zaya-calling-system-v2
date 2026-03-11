@@ -1,6 +1,6 @@
 {
   "name": "zaya-group-calling-system",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "description": "Zaya Group Calling System - Full Stack CRM",
   "main": "electron/main.js",
   "scripts": {
@@ -45,7 +45,7 @@
   "build": {
     "appId": "com.zayagroup.callingsystem",
     "productName": "Zaya Calling System",
-    "artifactName": "${productName} Setup ${version}.${ext}",
+    "artifactName": "Zaya-Calling-System-Setup-${version}.${ext}",
     "asar": true,
     "publish": [
       {
