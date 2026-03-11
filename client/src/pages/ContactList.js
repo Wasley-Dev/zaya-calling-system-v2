@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Plus, Trash2, Edit2, Phone, Mail, MoreHorizontal, RefreshCw, List, Columns } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, Phone, Mail, MoreHorizontal, RefreshCw, List, Columns, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getContacts, deleteContact, quickUpdate } from '../utils/api';
 import { statusClass, stageClass, typeClass, bookingClass, fmtAgo, initials, CALLER_TYPES, STATUS_OPTIONS, STAGE_OPTIONS, BOOKING_OPTIONS, PRIORITY_OPTIONS, getComplianceStatus, getCallbackStatus } from '../utils/helpers';
@@ -124,6 +124,7 @@ export default function ContactList() {
         </div>
         <div className="pg-actions">
           <button className="btn btn-secondary btn-sm btn-icon" title="Refresh" onClick={load}><RefreshCw size={14} /></button>
+          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><Printer size={14} /> Print</button>
           <button className={`btn btn-sm ${view==='table'?'btn-secondary':'btn-ghost'}`} onClick={() => setView('table')}><List size={14}/> Table</button>
           <button className={`btn btn-sm ${view==='kanban'?'btn-secondary':'btn-ghost'}`} onClick={() => setView('kanban')}><Columns size={14}/> Kanban</button>
           <button className="btn btn-primary" onClick={() => navigate('/contacts/new')}><Plus size={14} /> New Contact</button>
@@ -171,7 +172,9 @@ export default function ContactList() {
                     {cols.map(c => (
                       <div key={c.ID} className="pipe-card" onClick={() => navigate(`/contacts/${c.ID}/edit`)}>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                          <div className="avatar" style={{ width: 28, height: 28, fontSize: 10, flexShrink: 0 }}>{initials(c.First_Name,c.Last_Name)}</div>
+                          {c.Avatar_URL
+                            ? <img src={c.Avatar_URL} alt={`${c.First_Name} ${c.Last_Name}`} className="profile-avatar profile-avatar-sm" style={{ width: 28, height: 28, borderRadius: 10, flexShrink: 0 }} />
+                            : <div className="avatar" style={{ width: 28, height: 28, fontSize: 10, flexShrink: 0 }}>{initials(c.First_Name,c.Last_Name)}</div>}
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.First_Name} {c.Last_Name}</div>
                             <div style={{ fontSize: 11, color: 'var(--txt2)' }}>{c.Mobile_Phone}</div>
@@ -220,7 +223,9 @@ export default function ContactList() {
                     <tr key={c.ID} className="clickable" onClick={() => navigate(`/contacts/${c.ID}/edit`)}>
                       <td>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                          <div className="avatar">{initials(c.First_Name,c.Last_Name)}</div>
+                          {c.Avatar_URL
+                            ? <img src={c.Avatar_URL} alt={`${c.First_Name} ${c.Last_Name}`} className="profile-avatar profile-avatar-sm" />
+                            : <div className="avatar">{initials(c.First_Name,c.Last_Name)}</div>}
                           <div>
                             <div style={{ fontWeight: 600 }}>{c.First_Name} {c.Last_Name}</div>
                             {c.Job_Title && <div style={{ fontSize: 11.5, color: 'var(--txt2)' }}>{c.Job_Title}</div>}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Phone, Paperclip, Clock, Plus, Trash2, CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, Save, Phone, Paperclip, Clock, Plus, Trash2, CheckCircle, XCircle, AlertCircle, X, Printer, Download, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getContact, createContact, updateContact, saveDriver, updateDriver, uploadAttachment, deleteAttachment, logCall, deleteCall, getActiveSystemUsers, getStoredAuthUser } from '../utils/api';
 import { CALLER_TYPES, STATUS_OPTIONS, STAGE_OPTIONS, BOOKING_OPTIONS, COUNTRIES, LICENSE_CLASSES, VEHICLE_TYPES, CHECK_OPTIONS, CALL_OUTCOMES, PRIORITY_OPTIONS, fmt, fmtDT, fmtAgo, checkClass, outcomeClass, activityColor, initials, parseDocumentItems, getDocumentCoverageGrade, getDocumentGrade, getComplianceStatus, normalizeLicenseNumber, isValidLicenseNumber, normalizeBookingValue } from '../utils/helpers';
@@ -10,6 +10,7 @@ const EMPTY_FORM = {
   Address:'', Country_Region:'Zanzibar', Caller_Type:'DRIVER',
   Status:'Pending', Stage:'1 - New Caller', Booking:'', Documentations:'',
   Remarks:'', Notes:'', Priority:'Normal', Assigned_To:'', Next_Call_Date:'',
+  Avatar_URL:'',
 };
 const EMPTY_DRV = { DriverName:'', LicenseNumber:'', LicenseClass:'', LicenseIssueDate:'', LicenseExpiryDate:'', DVLACheck:'Pending', DBSCheck:'Pending', PCOCheck:'Pending', VehicleType:'', Notes:'' };
 const EMPTY_CALL = { Outcome:'Successful', Duration_Min:'', Notes:'', Called_By:'', Next_Action:'', Next_Call_Date:'' };
@@ -34,6 +35,166 @@ export default function ContactForm() {
   const [loggingCall,setLoggingCall]= useState(false);
   const [uploading,  setUploading]  = useState(false);
   const [systemUsers,setSystemUsers]= useState([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Failed to read file.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function buildContactPrintHtml() {
+    const fullName = `${form.First_Name || ''} ${form.Last_Name || ''}`.trim() || 'Contact';
+    const subtitle = (form.Job_Title || form.Caller_Type || '').trim();
+    const photo = String(form.Avatar_URL || '').trim();
+    const rows = [
+      ['Role', form.Caller_Type],
+      ['Status', form.Status],
+      ['Stage', form.Stage],
+      ['Priority', form.Priority],
+      ['Assigned To', form.Assigned_To],
+      ['Next Call Date', form.Next_Call_Date],
+      ['Phone', form.Mobile_Phone],
+      ['Email', form.E_mail_Address],
+      ['Address', form.Address],
+      ['Country', form.Country_Region],
+      ['Documentations', form.Documentations],
+      ['Notes', form.Notes],
+    ].filter(([, v]) => String(v || '').trim());
+
+    const driverRows = form.Caller_Type === 'DRIVER' ? [
+      ['Driver Name', driver.DriverName || `${form.First_Name} ${form.Last_Name}`.trim()],
+      ['Licence No.', driver.LicenseNumber],
+      ['Licence Class', driver.LicenseClass],
+      ['Issue Date', driver.LicenseIssueDate],
+      ['Expiry Date', driver.LicenseExpiryDate],
+      ['DVLA', driver.DVLACheck],
+      ['Police Cert.', driver.DBSCheck],
+      ['TIN No.', driver.PCOCheck],
+      ['Vehicle', driver.VehicleType],
+      ['Driver Notes', driver.Notes],
+    ].filter(([, v]) => String(v || '').trim()) : [];
+
+    return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${escapeHtml(fullName)} - Contact</title>
+  <style>
+    :root { color-scheme: light; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: #f6f7fb; color: #111827; }
+    .page { max-width: 900px; margin: 32px auto; padding: 0 18px; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; box-shadow: 0 12px 28px rgba(15,23,42,0.08); overflow: hidden; }
+    .hdr { display: flex; gap: 16px; align-items: center; padding: 18px 18px 12px; border-bottom: 1px solid #eef2f7; }
+    .photo { width: 56px; height: 56px; border-radius: 14px; background: #0b1220; color: #fff; display:flex; align-items:center; justify-content:center; overflow:hidden; flex: 0 0 auto; }
+    .photo img { width: 100%; height: 100%; object-fit: cover; }
+    .ttl { font-size: 20px; font-weight: 800; line-height: 1.15; }
+    .sub { margin-top: 3px; color: #475569; font-size: 12.5px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; padding: 16px 18px 18px; }
+    .row { border: 1px solid #eef2f7; border-radius: 12px; padding: 10px 12px; }
+    .k { color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    .v { margin-top: 6px; font-size: 13.5px; white-space: pre-wrap; word-break: break-word; }
+    .sec { padding: 0 18px 18px; }
+    .sec h2 { margin: 0; padding: 14px 0 8px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: #334155; }
+    .list { border: 1px solid #eef2f7; border-radius: 12px; overflow: hidden; }
+    .item { display:flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-top: 1px solid #eef2f7; }
+    .item:first-child { border-top: 0; }
+    .item b { font-size: 12.5px; }
+    .item span { color: #475569; font-size: 12px; white-space: nowrap; }
+    @media print {
+      body { background: #fff; }
+      .page { margin: 0; max-width: none; padding: 0; }
+      .card { border: 0; border-radius: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <div class="hdr">
+        <div class="photo">
+          ${photo ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(fullName)}"/>` : `<span style="font-weight:800;">${escapeHtml(initials(form.First_Name, form.Last_Name))}</span>`}
+        </div>
+        <div>
+          <div class="ttl">${escapeHtml(fullName)}</div>
+          <div class="sub">${escapeHtml(subtitle)}</div>
+        </div>
+      </div>
+      <div class="grid">
+        ${rows.map(([k, v]) => `<div class="row"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`).join('')}
+      </div>
+      ${driverRows.length ? `
+      <div class="sec">
+        <h2>Driver & Licence</h2>
+        <div class="grid">
+          ${driverRows.map(([k, v]) => `<div class="row"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`).join('')}
+        </div>
+      </div>` : ''}
+      ${sessions.length ? `
+      <div class="sec">
+        <h2>Recent Calls</h2>
+        <div class="list">
+          ${sessions.slice(0, 8).map(s => `
+            <div class="item">
+              <div><b>${escapeHtml(s.Outcome || '')}</b><div style="color:#64748b;font-size:12px;margin-top:4px;">${escapeHtml(s.Notes || '')}</div></div>
+              <span>${escapeHtml(fmtDT(s.Called_At))}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>` : ''}
+    </div>
+  </div>
+</body>
+</html>`;
+  }
+
+  function openPreview() {
+    setPreviewOpen(true);
+  }
+
+  function doPrint() {
+    const html = buildContactPrintHtml();
+    const w = window.open('', '_blank', 'noopener,noreferrer,width=980,height=720');
+    if (!w) {
+      toast.error('Pop-up blocked. Allow pop-ups to print.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.onload = () => {
+      w.print();
+    };
+  }
+
+  function doDownload() {
+    const html = buildContactPrintHtml();
+    const fullName = `${form.First_Name || ''} ${form.Last_Name || ''}`.trim() || 'contact';
+    const safe = fullName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'contact';
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safe}.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 
   useEffect(() => {
     getActiveSystemUsers()
@@ -56,6 +217,7 @@ export default function ContactForm() {
         Notes: c.Notes||'', Priority: c.Priority||'Normal',
         Assigned_To: c.Assigned_To||'',
         Next_Call_Date: c.Next_Call_Date||'',
+        Avatar_URL: c.Avatar_URL||'',
       });
       setSessions(c.sessions || []);
       setActivity(c.activity || []);
@@ -127,6 +289,30 @@ export default function ContactForm() {
     } finally { setSaving(false); }
   }
 
+  async function handleContactImageUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Select an image file.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Contact image must be 5 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
+    try {
+      const avatarUrl = await fileToDataUrl(file);
+      setForm(current => ({ ...current, Avatar_URL: avatarUrl }));
+      toast.success('Contact photo ready to save.');
+    } catch (_) {
+      toast.error('Failed to load image.');
+    } finally {
+      event.target.value = '';
+    }
+  }
+
   async function handleLogCall() {
     if (!id) return;
     setLoggingCall(true);
@@ -192,7 +378,9 @@ export default function ContactForm() {
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <button className="btn btn-secondary btn-icon" onClick={() => navigate(-1)}><ArrowLeft size={15}/></button>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            {isEdit && <div className="avatar" style={{ width:38,height:38,fontSize:14 }}>{initials(form.First_Name,form.Last_Name)}</div>}
+            {isEdit && (form.Avatar_URL
+              ? <img src={form.Avatar_URL} alt={`${form.First_Name} ${form.Last_Name}`} className="profile-avatar profile-avatar-sm" style={{ width: 38, height: 38, borderRadius: 14 }} />
+              : <div className="avatar" style={{ width:38,height:38,fontSize:14 }}>{initials(form.First_Name,form.Last_Name)}</div>)}
             <div>
               <div className="pg-title">{isEdit ? `${form.First_Name} ${form.Last_Name}` : 'New Contact'}</div>
               <div className="pg-subtitle">{isEdit ? form.Job_Title || form.Caller_Type : 'Fill in the details below'}</div>
@@ -205,6 +393,15 @@ export default function ContactForm() {
               <Phone size={13}/> Log Call
             </button>
           )}
+          <button className="btn btn-secondary btn-sm" onClick={openPreview} disabled={saving}>
+            <Eye size={13}/> Preview
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={doDownload} disabled={saving}>
+            <Download size={13}/> Download
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={doPrint} disabled={saving}>
+            <Printer size={13}/> Print
+          </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
             <Save size={13}/> {saving ? 'Saving…' : 'Save'}
           </button>
@@ -223,6 +420,28 @@ export default function ContactForm() {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
             <div className="card">
               <div className="card-title">Personal Information</div>
+              <div className="profile-hero" style={{ marginBottom: 14 }}>
+                {form.Avatar_URL ? <img src={form.Avatar_URL} alt={`${form.First_Name} ${form.Last_Name}`.trim() || 'Contact'} className="profile-avatar profile-avatar-lg" /> : <div className="avatar profile-avatar-lg">{initials(form.First_Name, form.Last_Name)}</div>}
+                <div>
+                  <div className="profile-greeting">Contact Photo</div>
+                  <div className="form-hint">Add a picture to make the record easier to recognize.</div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                    <label className="btn btn-secondary" style={{ width: 'fit-content' }}>
+                      Upload Image
+                      <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleContactImageUpload} />
+                    </label>
+                    {form.Avatar_URL ? (
+                      <button className="btn btn-secondary" type="button" onClick={() => setForm(current => ({ ...current, Avatar_URL: '' }))}>
+                        <X size={13} /> Remove
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Contact Photo URL</label>
+                <input className="form-input" value={form.Avatar_URL || ''} onChange={f('Avatar_URL')} placeholder="https://... or paste an image data URL" />
+              </div>
               <div className="form-row cols-2">
                 <div className="form-group"><label className="form-label">First Name *</label><input className="form-input" value={form.First_Name} onChange={f('First_Name')} placeholder="First name"/></div>
                 <div className="form-group"><label className="form-label">Last Name</label><input className="form-input" value={form.Last_Name} onChange={f('Last_Name')} placeholder="Last name"/></div>
@@ -513,6 +732,24 @@ export default function ContactForm() {
       </div>
 
       {/* ── LOG CALL MODAL ─────────────────────────────────────── */}
+      {previewOpen ? (
+        <div className="overlay" onClick={() => setPreviewOpen(false)}>
+          <div className="modal modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: 980 }}>
+            <div className="modal-hd">
+              <div className="modal-ttl">Contact Preview</div>
+              <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                <button className="btn btn-secondary btn-sm" onClick={doDownload}><Download size={13} />Download</button>
+                <button className="btn btn-secondary btn-sm" onClick={doPrint}><Printer size={13} />Print</button>
+              </div>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setPreviewOpen(false)}><X size={16}/></button>
+            </div>
+            <div className="modal-bd" style={{ padding: 0 }}>
+              <iframe title="contact-preview" style={{ width: '100%', height: '70vh', border: 0, background: '#fff' }} srcDoc={buildContactPrintHtml()} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {callModal && (
         <div className="overlay" onClick={() => setCallModal(false)}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>

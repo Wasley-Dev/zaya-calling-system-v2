@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Car, AlertTriangle, CheckCircle, Search, Filter } from 'lucide-react';
+import { Car, AlertTriangle, CheckCircle, Search, Printer } from 'lucide-react';
 import { getAllDrivers, getExpiringDrivers } from '../utils/api';
 import { fmt, statusClass, stageClass, checkClass, getComplianceStatus, getCallbackStatus } from '../utils/helpers';
 
@@ -50,6 +50,9 @@ export default function Drivers() {
         <div>
           <div className="pg-title">Drivers</div>
           <div className="pg-subtitle">{drivers.length} registered drivers</div>
+        </div>
+        <div className="pg-actions">
+          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><Printer size={14} /> Print</button>
         </div>
       </div>
 

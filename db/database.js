@@ -192,6 +192,7 @@ function initializeSchema() {
       Documentations  TEXT    DEFAULT '',
       Remarks         TEXT    DEFAULT '',
       Notes           TEXT    DEFAULT '',
+      Avatar_URL      TEXT    DEFAULT '',
       Attachments     TEXT    DEFAULT '[]',
       Priority        TEXT    DEFAULT 'Normal',
       Assigned_To     TEXT    DEFAULT '',
@@ -287,6 +288,10 @@ function initializeSchema() {
     CREATE INDEX IF NOT EXISTS idx_system_users_email ON SystemUsers(Email);
     CREATE INDEX IF NOT EXISTS idx_system_sessions_user ON SystemSessions(UserID);
   `);
+
+  try {
+    database.prepare(`ALTER TABLE CallLogs ADD COLUMN Avatar_URL TEXT DEFAULT ''`).run();
+  } catch (_) {}
 
   const userColumns = database.prepare("PRAGMA table_info(SystemUsers)").all();
   if (!userColumns.some(column => column.name === 'Avatar_URL')) {

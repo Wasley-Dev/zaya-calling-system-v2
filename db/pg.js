@@ -166,6 +166,7 @@ async function ensureSchema() {
       "Documentations"  TEXT DEFAULT '',
       "Remarks"         TEXT DEFAULT '',
       "Notes"           TEXT DEFAULT '',
+      "Avatar_URL"      TEXT DEFAULT '',
       "Attachments"     JSONB NOT NULL DEFAULT '[]'::jsonb,
       "Priority"        TEXT DEFAULT 'Normal',
       "Assigned_To"     TEXT DEFAULT '',
@@ -175,6 +176,8 @@ async function ensureSchema() {
       "Created_At"      TIMESTAMPTZ NOT NULL DEFAULT now(),
       "Updated_At"      TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
+    ALTER TABLE "CallLogs" ADD COLUMN IF NOT EXISTS "Avatar_URL" TEXT DEFAULT '';
 
     CREATE TABLE IF NOT EXISTS "DriverDetails" (
       "DriverDetailID"    BIGSERIAL PRIMARY KEY,
@@ -878,6 +881,7 @@ async function restoreSystemBackup(backupName) {
         'Documentations',
         'Remarks',
         'Notes',
+        'Avatar_URL',
         'Attachments',
         'Priority',
         'Assigned_To',
