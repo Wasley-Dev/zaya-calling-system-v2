@@ -72,6 +72,7 @@ const FALLBACK_SETTINGS = {
   systemName: 'Zaya Calling System',
   systemTagline: 'Enterprise operations workspace',
   welcomeMessage: 'Welcome back',
+  systemSummary: 'Corporate dark and light aligned to the logo palette',
   logoUrl: '/zaya-logo.png?v=20260309-2',
   loginImage: ROTATING_LOGIN_IMAGES.join('\n'),
   appBackgroundImage: '',
@@ -503,7 +504,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
     }
     setBusy(true);
     try {
-      await createSystemUser({ ...newUser, role: canManageAdmins ? newUser.role : 'User' });
+      await createSystemUser({ ...newUser, role: roleOptions.includes(newUser.role) ? newUser.role : 'User' });
       setNewUser({ name: '', email: '', role: 'User', password: '' });
       await loadAdminData();
       toast.success('User created');
@@ -517,7 +518,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
   async function toggleUser(target) {
     setBusy(true);
     try {
-      await updateSystemUser(target.id, { name: target.name, role: canManageAdmins ? target.role : 'User', isActive: !target.isActive });
+      await updateSystemUser(target.id, { name: target.name, role: roleOptions.includes(target.role) ? target.role : 'User', isActive: !target.isActive });
       await loadAdminData();
       toast.success(target.isActive ? 'User disabled' : 'User enabled');
     } catch (error) {
@@ -615,14 +616,18 @@ function AdminConsole({ user, settings, onSaveSettings }) {
     }
   }
 
-  const roleOptions = canManageAdmins ? ['User', 'Admin', 'Super Admin'] : ['User'];
+  const roleOptions = user.role === 'Super Admin'
+    ? ['User', 'Admin', 'Super Admin']
+    : user.role === 'Admin'
+      ? ['User', 'Admin']
+      : ['User'];
   const tabs = [
     { key: 'users', label: canManageAdmins ? 'Users & Admins' : 'Users' },
     canManageAdmins ? { key: 'live', label: 'Live Sessions' } : null,
-    { key: 'appearance', label: 'Branding & Theme' },
-    { key: 'settings', label: 'System Settings' },
+    canManageAdmins ? { key: 'appearance', label: 'Branding & Theme' } : null,
+    canManageAdmins ? { key: 'settings', label: 'System Settings' } : null,
     { key: 'recovery', label: 'Backup & Recovery' },
-    { key: 'maintenance', label: 'Maintenance' },
+    canManageAdmins ? { key: 'maintenance', label: 'Maintenance' } : null,
   ].filter(Boolean);
 
   return (
@@ -645,7 +650,7 @@ function AdminConsole({ user, settings, onSaveSettings }) {
         {tab === 'users' ? (
           <div className="admin-grid">
             <div className="card">
-              <div className="card-title">{canManageAdmins ? 'Create User or Admin' : 'Create User'}</div>
+              <div className="card-title">{roleOptions.includes('Admin') ? 'Create User or Admin' : 'Create User'}</div>
               <div className="form-row cols-2">
                 <div className="form-group">
                   <label className="form-label">Full Name</label>
@@ -663,7 +668,11 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                   <select className="form-input" value={newUser.role} onChange={event => setNewUser(current => ({ ...current, role: event.target.value }))}>
                     {roleOptions.map(role => <option key={role}>{role}</option>)}
                   </select>
-                  {!canManageAdmins ? <div className="form-hint">Only the super admin can create admin or super admin accounts.</div> : <div className="form-hint">Only the super admin can add another super admin.</div>}
+                  {user.role === 'Super Admin'
+                    ? <div className="form-hint">Only the super admin can add another super admin.</div>
+                    : user.role === 'Admin'
+                      ? <div className="form-hint">Admins can create admin and user accounts. Only the super admin can create super admin accounts.</div>
+                      : <div className="form-hint">Only admins can create accounts.</div>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Password</label>
@@ -875,8 +884,12 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                 <div className="settings-row"><span>Name</span><strong>{draft.systemName}</strong></div>
                 <div className="settings-row"><span>Tagline</span><strong>{draft.systemTagline}</strong></div>
                 <div className="settings-row"><span>Welcome</span><strong>{draft.welcomeMessage}</strong></div>
-                <div className="settings-row"><span>Theme</span><strong>Corporate dark and light aligned to the logo palette</strong></div>
+                <div className="settings-row">
+                  <span>Summary</span>
+                  <textarea className="form-input" value={draft.systemSummary || ''} onChange={event => updateDraft('systemSummary', event.target.value)} />
+                </div>
               </div>
+              <button className="btn btn-primary" onClick={saveSettings} disabled={busy}>Save System Summary</button>
             </div>
           </div>
         ) : null}
@@ -955,7 +968,7 @@ function Sidebar({ alerts, roleGroups, settings, theme, onToggleTheme, user, onL
   const loc = useLocation();
   const nav = useNavigate();
   const [rolesOpen, setRolesOpen] = useState(false);
-  const canAccessAdminConsole = user.role === 'Super Admin';
+  const canAccessAdminConsole = user.role === 'Super Admin' || user.role === 'Admin';
   const items = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     { icon: Users, label: 'Contacts', path: '/contacts' },
@@ -1115,7 +1128,7 @@ function Shell({ user, settings, theme, onToggleTheme, onLogout, onSaveSettings,
             <Route path="/drivers" element={<Drivers />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/profile" element={<ProfilePage user={user} onUpdateUser={onUpdateUser} />} />
-            <Route path="/admin" element={user.role === 'Super Admin' ? <AdminConsole user={user} settings={settings} onSaveSettings={onSaveSettings} /> : <Navigate to="/" replace />} />
+            <Route path="/admin" element={(user.role === 'Super Admin' || user.role === 'Admin') ? <AdminConsole user={user} settings={settings} onSaveSettings={onSaveSettings} /> : <Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

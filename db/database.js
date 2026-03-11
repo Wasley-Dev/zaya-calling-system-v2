@@ -27,6 +27,7 @@ const DEFAULT_SYSTEM_SETTINGS = {
   systemName: 'Zaya Calling System',
   systemTagline: 'Enterprise operations workspace',
   welcomeMessage: 'Welcome back',
+  systemSummary: 'Corporate dark and light aligned to the logo palette',
   logoUrl: '/zaya-logo.png?v=20260309-2',
   loginImage: DEFAULT_ROTATING_LOGIN_IMAGES.join('\n'),
   appBackgroundImage: '',

@@ -54,6 +54,31 @@ function normalizeSystemRole(value, fallback = 'User') {
   return ['Super Admin', 'Admin', 'User'].includes(role) ? role : fallback;
 }
 
+function sanitizeBackupLabel(value) {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '')
+    .slice(0, 48);
+  return normalized;
+}
+
+function getTimestampCompact(date = new Date()) {
+  const pad = n => String(n).padStart(2, '0');
+  return [
+    date.getUTCFullYear(),
+    pad(date.getUTCMonth() + 1),
+    pad(date.getUTCDate()),
+    '-',
+    pad(date.getUTCHours()),
+    pad(date.getUTCMinutes()),
+    pad(date.getUTCSeconds()),
+    'Z',
+  ].join('');
+}
+
 async function ensureSchema() {
   if (!ENABLED || schemaReady) return;
 
@@ -155,6 +180,16 @@ async function ensureSchema() {
       "Setting_Value" TEXT NOT NULL DEFAULT '',
       "Updated_At"    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
+    CREATE TABLE IF NOT EXISTS "SystemBackups" (
+      "BackupName" TEXT PRIMARY KEY,
+      "Type"       TEXT NOT NULL DEFAULT 'manual',
+      "Label"      TEXT NOT NULL DEFAULT '',
+      "Size"       BIGINT NOT NULL DEFAULT 0,
+      "Payload"    JSONB NOT NULL,
+      "Created_At" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "Updated_At" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
   `);
 
   // Indexes
@@ -168,6 +203,7 @@ async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_activity_time ON "ActivityLog"("Created_At");
     CREATE INDEX IF NOT EXISTS idx_system_users_email ON "SystemUsers"("Email");
     CREATE INDEX IF NOT EXISTS idx_system_sessions_user ON "SystemSessions"("UserID");
+    CREATE INDEX IF NOT EXISTS idx_system_backups_time ON "SystemBackups"("Created_At");
   `);
 
   // Seed minimal settings (same keys as SQLite)
@@ -175,6 +211,7 @@ async function ensureSchema() {
     systemName: 'Zaya Calling System',
     systemTagline: 'Enterprise operations workspace',
     welcomeMessage: 'Welcome back',
+    systemSummary: 'Corporate dark and light aligned to the logo palette',
     logoUrl: '/zaya-logo.png?v=20260309-2',
     // New image per day (UTC). Admins can add/remove URLs in System Settings.
     loginImage: [
@@ -585,6 +622,7 @@ async function updateSystemSettings(patch = {}) {
       'systemName',
       'systemTagline',
       'welcomeMessage',
+      'systemSummary',
       'logoUrl',
       'loginImage',
       'appBackgroundImage',
@@ -619,6 +657,230 @@ async function closePg() {
   schemaReady = false;
 }
 
+async function listSystemBackups() {
+  return withSchema(async () => {
+    const result = await pgQuery(
+      `
+      SELECT "BackupName" AS name, "Type" AS type, "Size" AS size, "Created_At" AS "createdAt", "Updated_At" AS "updatedAt"
+      FROM "SystemBackups"
+      ORDER BY "Created_At" DESC
+      LIMIT 50
+      `
+    );
+    return result.rows.map(row => ({
+      name: row.name,
+      type: row.type,
+      size: Number(row.size || 0),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }));
+  });
+}
+
+async function createSystemBackup({ type = 'manual', label = '' } = {}) {
+  return withSchema(async () => {
+    const safeLabel = sanitizeBackupLabel(label);
+    const name = `${getTimestampCompact()}-${String(type || 'manual')}${safeLabel ? `-${safeLabel}` : ''}.json`;
+
+    const tables = {};
+    const fetchAll = async (sql, params = []) => (await pgQuery(sql, params)).rows;
+
+    tables.CallLogs = await fetchAll(`SELECT * FROM "CallLogs" ORDER BY "ID" ASC`);
+    tables.DriverDetails = await fetchAll(`SELECT * FROM "DriverDetails" ORDER BY "DriverDetailID" ASC`);
+    tables.CallSessions = await fetchAll(`SELECT * FROM "CallSessions" ORDER BY "SessionID" ASC`);
+    tables.ActivityLog = await fetchAll(`SELECT * FROM "ActivityLog" ORDER BY "ActivityID" ASC`);
+    tables.SystemUsers = await fetchAll(`SELECT * FROM "SystemUsers" ORDER BY "UserID" ASC`);
+    tables.SystemSettings = await fetchAll(`SELECT * FROM "SystemSettings" ORDER BY "Setting_Key" ASC`);
+
+    const payload = {
+      schemaVersion: 1,
+      createdAt: new Date().toISOString(),
+      tables,
+    };
+
+    const json = JSON.stringify(payload);
+    const size = Buffer.byteLength(json, 'utf8');
+
+    await pgQuery(
+      `
+      INSERT INTO "SystemBackups" ("BackupName","Type","Label","Size","Payload","Created_At","Updated_At")
+      VALUES ($1,$2,$3,$4,$5::jsonb,now(),now())
+      `,
+      [name, String(type || 'manual'), String(label || ''), size, json]
+    );
+
+    // Keep a small window of automated backups.
+    if (String(type || '').toLowerCase() === 'auto') {
+      await pgQuery(`
+        DELETE FROM "SystemBackups"
+        WHERE "BackupName" IN (
+          SELECT "BackupName"
+          FROM "SystemBackups"
+          WHERE "Type"='auto'
+          ORDER BY "Created_At" DESC
+          OFFSET 14
+        )
+      `);
+    }
+
+    return {
+      name,
+      type: String(type || 'manual'),
+      size,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  });
+}
+
+async function restoreSystemBackup(backupName) {
+  return withSchema(async () => {
+    const safeName = String(backupName || '').trim();
+    if (!safeName) throw new Error('Backup name is required.');
+
+    const backupResult = await pgQuery(
+      `SELECT "BackupName","Payload" FROM "SystemBackups" WHERE "BackupName"=$1`,
+      [safeName]
+    );
+    const backupRow = backupResult.rows[0];
+    if (!backupRow) throw new Error('Backup file not found.');
+
+    // Safety copy first.
+    await createSystemBackup({ type: 'pre-restore', label: 'safety-copy' });
+
+    const payload = backupRow.Payload;
+    const tables = payload?.tables || {};
+
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+
+      // Clear sessions first (online tracking), then data tables.
+      await client.query(`TRUNCATE "SystemSessions" RESTART IDENTITY CASCADE`);
+
+      await client.query(`TRUNCATE "CallSessions","DriverDetails","ActivityLog","CallLogs" RESTART IDENTITY CASCADE`);
+      await client.query(`TRUNCATE "SystemSettings" RESTART IDENTITY CASCADE`);
+      await client.query(`TRUNCATE "SystemUsers" RESTART IDENTITY CASCADE`);
+
+      const insertMany = async (tableName, rows, columns) => {
+        if (!Array.isArray(rows) || !rows.length) return;
+        const colList = columns.map(c => `"${c}"`).join(',');
+        const valuesSql = columns.map((_, idx) => `$${idx + 1}`).join(',');
+        const sql = `INSERT INTO "${tableName}" (${colList}) VALUES (${valuesSql})`;
+        for (const row of rows) {
+          const params = columns.map(col => row[col] === undefined ? null : row[col]);
+          // eslint-disable-next-line no-await-in-loop
+          await client.query(sql, params);
+        }
+      };
+
+      await insertMany('SystemUsers', tables.SystemUsers, [
+        'UserID',
+        'Name',
+        'Email',
+        'Avatar_URL',
+        'Role',
+        'Password_Salt',
+        'Password_Hash',
+        'IsActive',
+        'Last_Login_At',
+        'Created_At',
+        'Updated_At',
+      ]);
+
+      await insertMany('SystemSettings', tables.SystemSettings, ['Setting_Key', 'Setting_Value', 'Updated_At']);
+
+      await insertMany('CallLogs', tables.CallLogs, [
+        'ID',
+        'First_Name',
+        'Last_Name',
+        'Job_Title',
+        'Mobile_Phone',
+        'E_mail_Address',
+        'Address',
+        'Country_Region',
+        'Caller_Type',
+        'Status',
+        'Stage',
+        'Booking',
+        'Documentations',
+        'Remarks',
+        'Notes',
+        'Attachments',
+        'Priority',
+        'Assigned_To',
+        'Last_Call_Date',
+        'Next_Call_Date',
+        'Call_Count',
+        'Created_At',
+        'Updated_At',
+      ]);
+
+      await insertMany('DriverDetails', tables.DriverDetails, [
+        'DriverDetailID',
+        'CallLogsID',
+        'DriverName',
+        'LicenseNumber',
+        'LicenseClass',
+        'LicenseIssueDate',
+        'LicenseExpiryDate',
+        'DVLACheck',
+        'DBSCheck',
+        'PCOCheck',
+        'VehicleType',
+        'Notes',
+        'Created_At',
+        'Updated_At',
+      ]);
+
+      await insertMany('CallSessions', tables.CallSessions, [
+        'SessionID',
+        'CallLogsID',
+        'Outcome',
+        'Duration_Min',
+        'Notes',
+        'Called_By',
+        'Called_At',
+        'Next_Action',
+      ]);
+
+      await insertMany('ActivityLog', tables.ActivityLog, [
+        'ActivityID',
+        'CallLogsID',
+        'Action',
+        'Detail',
+        'Entity',
+        'Created_By',
+        'Created_At',
+      ]);
+
+      // Reset sequences to max IDs (if any).
+      await client.query(`SELECT setval(pg_get_serial_sequence('"CallLogs"','ID'), GREATEST((SELECT COALESCE(MAX("ID"),0) FROM "CallLogs"), 1), true)`);
+      await client.query(`SELECT setval(pg_get_serial_sequence('"DriverDetails"','DriverDetailID'), GREATEST((SELECT COALESCE(MAX("DriverDetailID"),0) FROM "DriverDetails"), 1), true)`);
+      await client.query(`SELECT setval(pg_get_serial_sequence('"CallSessions"','SessionID'), GREATEST((SELECT COALESCE(MAX("SessionID"),0) FROM "CallSessions"), 1), true)`);
+      await client.query(`SELECT setval(pg_get_serial_sequence('"ActivityLog"','ActivityID'), GREATEST((SELECT COALESCE(MAX("ActivityID"),0) FROM "ActivityLog"), 1), true)`);
+      await client.query(`SELECT setval(pg_get_serial_sequence('"SystemUsers"','UserID'), GREATEST((SELECT COALESCE(MAX("UserID"),0) FROM "SystemUsers"), 1), true)`);
+
+      await client.query('COMMIT');
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    // Re-assert bootstrap super admin after restore.
+    schemaReady = false;
+    await ensureSchema();
+
+    const usersNow = await pgQuery(`SELECT COUNT(*)::int AS c FROM "SystemUsers"`);
+    return {
+      restored: safeName,
+      currentUsers: Number(usersNow.rows[0]?.c || 0),
+    };
+  });
+}
+
 module.exports = {
   isPgEnabled,
   pgQuery,
@@ -630,11 +892,14 @@ module.exports = {
   closeSystemSession,
   createSystemSession,
   createSystemUser,
+  createSystemBackup,
   getSystemSession,
   getSystemSettings,
   listActiveUserNames,
+  listSystemBackups,
   listLiveSystemUsers,
   listSystemUsers,
+  restoreSystemBackup,
   setSystemUserPassword,
   touchSystemSession,
   updateOwnProfile,

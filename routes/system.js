@@ -148,8 +148,8 @@ router.post('/users', async (req, res) => {
       ? await requireSystemRoleAsync(req, ['Super Admin', 'Admin'])
       : requireSystemRole(req, ['Super Admin', 'Admin']);
     const payload = { ...(req.body || {}) };
-    if (requester.role !== 'Super Admin' && payload.role !== 'User') {
-      return res.status(403).json({ success: false, error: 'Only the super admin can create admin or super admin accounts.' });
+    if (requester.role !== 'Super Admin' && payload.role === 'Super Admin') {
+      return res.status(403).json({ success: false, error: 'Only the super admin can create super admin accounts.' });
     }
     const user = pg.isPgEnabled() ? await pg.createSystemUser(payload) : createSystemUser(payload);
     res.status(201).json({ success: true, data: user });
@@ -182,11 +182,11 @@ router.patch('/users/:id', async (req, res) => {
     if (targetUser.email === ROOT_SYSTEM_EMAIL) {
       return res.status(403).json({ success: false, error: 'The primary super admin account cannot be edited by another user.' });
     }
-    if (requester.role !== 'Super Admin' && targetUser.role !== 'User') {
-      return res.status(403).json({ success: false, error: 'Only the super admin can update admin accounts.' });
+    if (requester.role !== 'Super Admin' && targetUser.role === 'Super Admin') {
+      return res.status(403).json({ success: false, error: 'Only the super admin can update super admin accounts.' });
     }
-    if (requester.role !== 'Super Admin' && req.body?.role && req.body.role !== 'User') {
-      return res.status(403).json({ success: false, error: 'Only the super admin can assign admin roles.' });
+    if (requester.role !== 'Super Admin' && req.body?.role === 'Super Admin') {
+      return res.status(403).json({ success: false, error: 'Only the super admin can assign super admin roles.' });
     }
     const user = pg.isPgEnabled()
       ? await pg.updateSystemUser(Number(req.params.id), req.body || {})
@@ -211,8 +211,8 @@ router.post('/users/:id/password', async (req, res) => {
     if (targetUser.email === ROOT_SYSTEM_EMAIL) {
       return res.status(403).json({ success: false, error: 'The primary super admin password must be changed by that account.' });
     }
-    if (requester.role !== 'Super Admin' && targetUser.role !== 'User') {
-      return res.status(403).json({ success: false, error: 'Only the super admin can reset admin passwords.' });
+    if (requester.role !== 'Super Admin' && targetUser.role === 'Super Admin') {
+      return res.status(403).json({ success: false, error: 'Only the super admin can reset super admin passwords.' });
     }
     const user = pg.isPgEnabled()
       ? await pg.setSystemUserPassword(Number(req.params.id), req.body?.password)
@@ -279,10 +279,12 @@ router.patch('/settings', async (req, res) => {
   }
 });
 
-router.get('/backups', (req, res) => {
+router.get('/backups', async (req, res) => {
   try {
     if (pg.isPgEnabled()) {
-      return res.status(501).json({ success: false, error: 'Backups are not supported on Postgres deployments.' });
+      await requireSystemRoleAsync(req, ['Super Admin', 'Admin']);
+      const data = await pg.listSystemBackups();
+      return res.json({ success: true, data });
     }
     requireSystemRole(req, ['Super Admin', 'Admin']);
     res.json({ success: true, data: listBackups() });
@@ -294,7 +296,12 @@ router.get('/backups', (req, res) => {
 router.post('/backups', async (req, res) => {
   try {
     if (pg.isPgEnabled()) {
-      return res.status(501).json({ success: false, error: 'Backups are not supported on Postgres deployments.' });
+      const requester = await requireSystemRoleAsync(req, ['Super Admin', 'Admin']);
+      const backup = await pg.createSystemBackup({
+        type: req.body?.type || 'manual',
+        label: req.body?.label || requester.name || '',
+      });
+      return res.status(201).json({ success: true, data: backup });
     }
     const requester = requireSystemRole(req, ['Super Admin', 'Admin']);
     const backup = await createBackup({
@@ -310,7 +317,9 @@ router.post('/backups', async (req, res) => {
 router.post('/recovery/restore', async (req, res) => {
   try {
     if (pg.isPgEnabled()) {
-      return res.status(501).json({ success: false, error: 'Restore is not supported on Postgres deployments.' });
+      await requireSystemRoleAsync(req, ['Super Admin']);
+      const restored = await pg.restoreSystemBackup(req.body?.backupName);
+      return res.json({ success: true, data: restored });
     }
     requireSystemRole(req, ['Super Admin', 'Admin']);
     const restored = await restoreBackup(req.body?.backupName);
@@ -345,18 +354,22 @@ router.post('/session/logout', async (req, res) => {
 
 router.get('/status', (req, res) => {
   try {
-    requireSystemRole(req, ['Super Admin', 'Admin']);
     if (pg.isPgEnabled()) {
-      return res.json({
-        success: true,
-        data: {
-          backupIntervalHours: 0,
-          dbPath: 'postgres',
-          backupsDir: 'n/a',
-          backupCount: 0,
-        },
-      });
+      requireSystemRoleAsync(req, ['Super Admin', 'Admin'])
+        .then(() => pg.listSystemBackups())
+        .then(backups => res.json({
+          success: true,
+          data: {
+            backupIntervalHours: 0,
+            dbPath: 'postgres',
+            backupsDir: 'n/a',
+            backupCount: backups.length,
+          },
+        }))
+        .catch(error => res.status(error.status || 500).json({ success: false, error: error.message }));
+      return;
     }
+    requireSystemRole(req, ['Super Admin', 'Admin']);
     const { backupsDir, dbPath } = getStoragePaths();
     res.json({
       success: true,
