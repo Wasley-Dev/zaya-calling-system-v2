@@ -176,16 +176,27 @@ async function ensureSchema() {
     systemTagline: 'Enterprise operations workspace',
     welcomeMessage: 'Welcome back',
     logoUrl: '/zaya-logo.png?v=20260309-2',
-    loginImage: '/login-visual.jpg?v=20260309-2',
+    // New image per day (UTC). Admins can add/remove URLs in System Settings.
+    loginImage: [
+      'https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=1600',
+      'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=1600',
+      'https://images.pexels.com/photos/3861969/pexels-photo-3861969.jpeg?auto=compress&cs=tinysrgb&w=1600',
+      'https://images.pexels.com/photos/7654576/pexels-photo-7654576.jpeg?auto=compress&cs=tinysrgb&w=1600',
+    ].join('\n'),
     appBackgroundImage: '',
     loginHeadline: "Enter with today's business-development focus.",
     loginCopy: 'Use the workspace to convert follow-up clarity into pipeline movement and stronger execution.',
     quote: 'Growth becomes predictable when every interaction leaves the client with less uncertainty than before.',
     quoteAuthor: 'Enterprise Strategy Note',
     facts: JSON.stringify([
-      'Sales velocity improves when handoffs between sourcing, calling, and compliance are explicit.',
-      'Most stalled deals are process problems before they become people problems.',
-      'Teams that measure next-action quality usually outperform teams that only measure volume.',
+      'Development velocity improves when teams document decisions once and reuse them everywhere.',
+      'Consistent follow-up habits drive more growth than last-minute bursts of activity.',
+      'Shared dashboards reduce status meetings and increase execution time.',
+      'Productivity scales when teams remove duplicate entry and standardize workflows.',
+      'Clear ownership shortens delivery cycles and improves operational quality.',
+      'Small process improvements compound into major output gains over a quarter.',
+      'Growth is easier to sustain when reporting, calling, and compliance stay in one system.',
+      'Strong internal tools reduce friction for both managers and frontline teams.',
     ]),
   };
 
@@ -197,6 +208,27 @@ async function ensureSchema() {
       ON CONFLICT ("Setting_Key") DO NOTHING
       `,
       [key, String(value)]
+    );
+  }
+
+  // One-time upgrade for older seeds (keeps admin changes intact).
+  // If the current values match the previous hardcoded defaults, replace them with the new pools.
+  const existingLoginImage = await pgQuery(`SELECT "Setting_Value" FROM "SystemSettings" WHERE "Setting_Key"='loginImage'`);
+  if (existingLoginImage.rows[0]?.Setting_Value === '/login-visual.jpg?v=20260309-2') {
+    await pgQuery(
+      `UPDATE "SystemSettings" SET "Setting_Value"=$1, "Updated_At"=now() WHERE "Setting_Key"='loginImage'`,
+      [String(defaultSettings.loginImage)]
+    );
+  }
+  const existingFacts = await pgQuery(`SELECT "Setting_Value" FROM "SystemSettings" WHERE "Setting_Key"='facts'`);
+  if (existingFacts.rows[0]?.Setting_Value === JSON.stringify([
+    'Sales velocity improves when handoffs between sourcing, calling, and compliance are explicit.',
+    'Most stalled deals are process problems before they become people problems.',
+    'Teams that measure next-action quality usually outperform teams that only measure volume.',
+  ])) {
+    await pgQuery(
+      `UPDATE "SystemSettings" SET "Setting_Value"=$1, "Updated_At"=now() WHERE "Setting_Key"='facts'`,
+      [String(defaultSettings.facts)]
     );
   }
 
@@ -609,4 +641,3 @@ module.exports = {
   updateSystemSettings,
   updateSystemUser,
 };
-
