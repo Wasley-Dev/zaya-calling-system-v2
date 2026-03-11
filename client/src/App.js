@@ -1150,6 +1150,7 @@ function AppFlow() {
   const [settings, setSettings] = useState(FALLBACK_SETTINGS);
   const [updateInfo, setUpdateInfo] = useState({ available: false, version: '' });
   const [syncInfo, setSyncInfo] = useState(() => getOfflineSyncState());
+  const authSessionId = authUser?.sessionId || null;
 
   useEffect(() => {
     document.body.dataset.theme = theme;
@@ -1163,7 +1164,7 @@ function AppFlow() {
   useEffect(() => subscribeToSyncState(setSyncInfo), []);
 
   useEffect(() => {
-    if (!authUser) {
+    if (!authSessionId) {
       setBootStage('loading');
       const timer = window.setTimeout(() => setBootStage('login'), 350);
       return () => window.clearTimeout(timer);
@@ -1171,7 +1172,7 @@ function AppFlow() {
     setBootStage('loading');
     const timer = window.setTimeout(() => setBootStage(orientationComplete ? 'app' : 'orientation'), 350);
     return () => window.clearTimeout(timer);
-  }, [authUser, orientationComplete]);
+  }, [authSessionId, orientationComplete]);
 
   useEffect(() => {
     if (!authUser?.sessionId) return undefined;

@@ -899,6 +899,47 @@ function seedData() {
     ia.run(c8.lastInsertRowid, 'Contact Created', 'Driver contact added', 'contact', 'System');
     ia.run(c8.lastInsertRowid, 'Stage Changed', 'Stage moved to 3 - Booked', 'contact', 'Sarah');
     ia.run(c8.lastInsertRowid, 'Booking Confirmed', 'Booking set to 1 - New Caller', 'contact', 'Sarah');
+
+    // Expand sample dataset to ~50 candidates with varied Caller_Type values (job roles).
+    const firstNames = ['Aisha', 'Noah', 'Liam', 'Sophia', 'Mason', 'Olivia', 'Ethan', 'Mia', 'Lucas', 'Emma', 'Zara', 'Hassan', 'Fatima', 'Daniel', 'Grace'];
+    const lastNames = ['Taylor', 'Brown', 'Davies', 'Evans', 'Thomas', 'Johnson', 'Walker', 'Wright', 'Hughes', 'Green', 'Hall', 'Lewis', 'Clarke', 'Young', 'Allen'];
+    const callerTypes = ['DRIVER', 'MANAGER', 'ACCOUNTANT', 'RECEPTIONIST', 'DISPATCHER', 'COMPLIANCE', 'SALES', 'HR', 'OPERATIONS', 'SUPERVISOR', 'CUSTOMER_SUPPORT'];
+    const jobTitleByType = {
+      DRIVER: 'Driver',
+      MANAGER: 'Operations Manager',
+      ACCOUNTANT: 'Accountant',
+      RECEPTIONIST: 'Receptionist',
+      DISPATCHER: 'Dispatcher',
+      COMPLIANCE: 'Compliance Officer',
+      SALES: 'Sales Executive',
+      HR: 'HR Coordinator',
+      OPERATIONS: 'Operations Associate',
+      SUPERVISOR: 'Shift Supervisor',
+      CUSTOMER_SUPPORT: 'Customer Support',
+    };
+
+    for (let i = 0; i < 42; i += 1) {
+      const fn = firstNames[i % firstNames.length];
+      const ln = lastNames[(i * 3) % lastNames.length];
+      const callerType = callerTypes[i % callerTypes.length];
+      const jobTitle = jobTitleByType[callerType] || 'Candidate';
+      const phone = `07${String(700000000 + i * 791).slice(0, 9)}`;
+      const email = `${fn.toLowerCase()}.${ln.toLowerCase()}${i + 9}@example.com`;
+      const status = i % 7 === 0 ? 'Approved' : 'Pending';
+      const stage = i % 5 === 0 ? '2 - Training' : '1 - New Caller';
+      const priority = i % 9 === 0 ? 'High' : (i % 4 === 0 ? 'Low' : 'Normal');
+      const assignee = i % 2 === 0 ? 'Sarah' : 'Mike';
+      const nextCall = `2025-01-${String(16 + (i % 12)).padStart(2, '0')}`;
+
+      const row = ic.run(fn, ln, jobTitle, phone, email, 'United Kingdom', 'United Kingdom', callerType, status, stage, null, 'Sample candidate', 'Auto-seeded sample record.', priority, assignee, 0, null, nextCall);
+      ia.run(row.lastInsertRowid, 'Contact Created', `Sample ${callerType} candidate seeded`, 'contact', 'System');
+
+      if (callerType === 'DRIVER') {
+        const licenseNo = `DVLA-${2020 + (i % 6)}-${String(1000 + i).padStart(4, '0')}`;
+        const cls = i % 3 === 0 ? 'Class C' : 'Class B';
+        id.run(row.lastInsertRowid, `${fn} ${ln}`, licenseNo, cls, '2021-01-01', '2028-01-01', 'Pending', 'Pending', 'Pending', i % 2 === 0 ? 'Van' : 'Car');
+      }
+    }
   })();
 }
 
