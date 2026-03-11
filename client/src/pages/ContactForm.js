@@ -472,7 +472,17 @@ export default function ContactForm() {
                   <div style={{ fontWeight:600, fontSize:13 }}>{att.filename}</div>
                   <div style={{ fontSize:11.5, color:'var(--txt3)' }}>{att.size ? `${(att.size/1024).toFixed(1)} KB · ` : ''}{fmtAgo(att.uploaded)}</div>
                 </div>
-                <a href={`/uploads/${att.path}`} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">Download</a>
+                <a
+                  href={att.url || (att.path ? `/uploads/${att.path}` : '#')}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-secondary btn-sm"
+                  onClick={event => {
+                    if (!att.url && !att.path) event.preventDefault();
+                  }}
+                >
+                  Download
+                </a>
                 <button className="btn btn-danger btn-icon btn-xs" onClick={() => handleDeleteAttachment(att.id)}><Trash2 size={11}/></button>
               </div>
             ))}

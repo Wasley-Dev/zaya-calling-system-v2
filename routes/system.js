@@ -21,6 +21,7 @@ const {
   updateSystemSettings,
   updateSystemUser,
 } = require('../db/database');
+const pg = require('../db/pg');
 
 const router = express.Router();
 const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com';
@@ -74,64 +75,106 @@ function requireSystemRole(req, allowedRoles) {
   return session;
 }
 
-router.post('/login', (req, res) => {
+async function requireSystemSessionAsync(req) {
+  const sessionId = getSessionIdFromRequest(req);
+  if (!sessionId) {
+    const error = new Error('Authentication required.');
+    error.status = 401;
+    throw error;
+  }
+
+  const session = await pg.getSystemSession(sessionId);
+  if (!session?.isOnline) {
+    const error = new Error('Session expired. Please log in again.');
+    error.status = 401;
+    throw error;
+  }
+
+  return session;
+}
+
+async function requireSystemRoleAsync(req, allowedRoles) {
+  const session = await requireSystemSessionAsync(req);
+  if (!allowedRoles.includes(session.role)) {
+    const error = new Error('You do not have permission to perform this action.');
+    error.status = 403;
+    throw error;
+  }
+  return session;
+}
+
+router.post('/login', async (req, res) => {
   try {
-    const user = authenticateSystemUser(req.body?.email, req.body?.password);
+    const user = pg.isPgEnabled()
+      ? await pg.authenticateSystemUser(req.body?.email, req.body?.password)
+      : authenticateSystemUser(req.body?.email, req.body?.password);
     if (!user) {
       return res.status(401).json({ success: false, error: 'Invalid email or password.' });
     }
-    const session = createSystemSession(user.id, getRequestContext(req));
+    const session = pg.isPgEnabled()
+      ? await pg.createSystemSession(user.id, getRequestContext(req))
+      : createSystemSession(user.id, getRequestContext(req));
     return res.json({ success: true, data: { ...user, sessionId: session.sessionId } });
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.get('/users', (req, res) => {
+router.get('/users', async (req, res) => {
   try {
-    requireSystemRole(req, ['Super Admin', 'Admin']);
-    res.json({ success: true, data: listSystemUsers() });
+    if (pg.isPgEnabled()) await requireSystemRoleAsync(req, ['Super Admin', 'Admin']);
+    else requireSystemRole(req, ['Super Admin', 'Admin']);
+    const users = pg.isPgEnabled() ? await pg.listSystemUsers() : listSystemUsers();
+    res.json({ success: true, data: users });
   } catch (error) {
     res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
-router.get('/users/active', (req, res) => {
+router.get('/users/active', async (req, res) => {
   try {
-    requireSystemSession(req);
-    res.json({ success: true, data: listActiveUserNames() });
+    if (pg.isPgEnabled()) await requireSystemSessionAsync(req);
+    else requireSystemSession(req);
+    const names = pg.isPgEnabled() ? await pg.listActiveUserNames() : listActiveUserNames();
+    res.json({ success: true, data: names });
   } catch (error) {
     res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
-router.post('/users', (req, res) => {
+router.post('/users', async (req, res) => {
   try {
-    const requester = requireSystemRole(req, ['Super Admin', 'Admin']);
+    const requester = pg.isPgEnabled()
+      ? await requireSystemRoleAsync(req, ['Super Admin', 'Admin'])
+      : requireSystemRole(req, ['Super Admin', 'Admin']);
     const payload = { ...(req.body || {}) };
     if (requester.role !== 'Super Admin' && payload.role !== 'User') {
       return res.status(403).json({ success: false, error: 'Only the super admin can create admin or super admin accounts.' });
     }
-    const user = createSystemUser(payload);
+    const user = pg.isPgEnabled() ? await pg.createSystemUser(payload) : createSystemUser(payload);
     res.status(201).json({ success: true, data: user });
   } catch (error) {
     res.status(error.status || 400).json({ success: false, error: error.message });
   }
 });
 
-router.get('/users/live', (req, res) => {
+router.get('/users/live', async (req, res) => {
   try {
-    requireSystemRole(req, ['Super Admin']);
-    res.json({ success: true, data: listLiveSystemUsers() });
+    if (pg.isPgEnabled()) await requireSystemRoleAsync(req, ['Super Admin']);
+    else requireSystemRole(req, ['Super Admin']);
+    const live = pg.isPgEnabled() ? await pg.listLiveSystemUsers() : listLiveSystemUsers();
+    res.json({ success: true, data: live });
   } catch (error) {
     res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
-router.patch('/users/:id', (req, res) => {
+router.patch('/users/:id', async (req, res) => {
   try {
-    const requester = requireSystemRole(req, ['Super Admin', 'Admin']);
-    const existingUsers = listSystemUsers();
+    const requester = pg.isPgEnabled()
+      ? await requireSystemRoleAsync(req, ['Super Admin', 'Admin'])
+      : requireSystemRole(req, ['Super Admin', 'Admin']);
+    const existingUsers = pg.isPgEnabled() ? await pg.listSystemUsers() : listSystemUsers();
     const targetUser = existingUsers.find(user => user.id === Number(req.params.id));
     if (!targetUser) {
       return res.status(404).json({ success: false, error: 'User not found.' });
@@ -145,7 +188,9 @@ router.patch('/users/:id', (req, res) => {
     if (requester.role !== 'Super Admin' && req.body?.role && req.body.role !== 'User') {
       return res.status(403).json({ success: false, error: 'Only the super admin can assign admin roles.' });
     }
-    const user = updateSystemUser(Number(req.params.id), req.body || {});
+    const user = pg.isPgEnabled()
+      ? await pg.updateSystemUser(Number(req.params.id), req.body || {})
+      : updateSystemUser(Number(req.params.id), req.body || {});
     res.json({ success: true, data: user });
   } catch (error) {
     const status = /not found/i.test(error.message) ? 404 : 400;
@@ -153,10 +198,12 @@ router.patch('/users/:id', (req, res) => {
   }
 });
 
-router.post('/users/:id/password', (req, res) => {
+router.post('/users/:id/password', async (req, res) => {
   try {
-    const requester = requireSystemRole(req, ['Super Admin', 'Admin']);
-    const existingUsers = listSystemUsers();
+    const requester = pg.isPgEnabled()
+      ? await requireSystemRoleAsync(req, ['Super Admin', 'Admin'])
+      : requireSystemRole(req, ['Super Admin', 'Admin']);
+    const existingUsers = pg.isPgEnabled() ? await pg.listSystemUsers() : listSystemUsers();
     const targetUser = existingUsers.find(user => user.id === Number(req.params.id));
     if (!targetUser) {
       return res.status(404).json({ success: false, error: 'User not found.' });
@@ -167,7 +214,9 @@ router.post('/users/:id/password', (req, res) => {
     if (requester.role !== 'Super Admin' && targetUser.role !== 'User') {
       return res.status(403).json({ success: false, error: 'Only the super admin can reset admin passwords.' });
     }
-    const user = setSystemUserPassword(Number(req.params.id), req.body?.password);
+    const user = pg.isPgEnabled()
+      ? await pg.setSystemUserPassword(Number(req.params.id), req.body?.password)
+      : setSystemUserPassword(Number(req.params.id), req.body?.password);
     res.json({ success: true, data: user });
   } catch (error) {
     const status = /not found/i.test(error.message) ? 404 : 400;
@@ -175,10 +224,10 @@ router.post('/users/:id/password', (req, res) => {
   }
 });
 
-router.get('/profile', (req, res) => {
+router.get('/profile', async (req, res) => {
   try {
-    const session = requireSystemSession(req);
-    const users = listSystemUsers();
+    const session = pg.isPgEnabled() ? await requireSystemSessionAsync(req) : requireSystemSession(req);
+    const users = pg.isPgEnabled() ? await pg.listSystemUsers() : listSystemUsers();
     const user = users.find(item => item.id === session.userId);
     res.json({ success: true, data: user || null });
   } catch (error) {
@@ -186,38 +235,45 @@ router.get('/profile', (req, res) => {
   }
 });
 
-router.patch('/profile', (req, res) => {
+router.patch('/profile', async (req, res) => {
   try {
-    const session = requireSystemSession(req);
-    const user = updateOwnProfile(session.userId, req.body || {});
+    const session = pg.isPgEnabled() ? await requireSystemSessionAsync(req) : requireSystemSession(req);
+    const user = pg.isPgEnabled()
+      ? await pg.updateOwnProfile(session.userId, req.body || {})
+      : updateOwnProfile(session.userId, req.body || {});
     res.json({ success: true, data: user });
   } catch (error) {
     res.status(error.status || 400).json({ success: false, error: error.message });
   }
 });
 
-router.post('/profile/password', (req, res) => {
+router.post('/profile/password', async (req, res) => {
   try {
-    const session = requireSystemSession(req);
-    const user = changeOwnPassword(session.userId, req.body?.currentPassword, req.body?.nextPassword);
+    const session = pg.isPgEnabled() ? await requireSystemSessionAsync(req) : requireSystemSession(req);
+    const user = pg.isPgEnabled()
+      ? await pg.changeOwnPassword(session.userId, req.body?.currentPassword, req.body?.nextPassword)
+      : changeOwnPassword(session.userId, req.body?.currentPassword, req.body?.nextPassword);
     res.json({ success: true, data: user });
   } catch (error) {
     res.status(error.status || 400).json({ success: false, error: error.message });
   }
 });
 
-router.get('/settings', (req, res) => {
+router.get('/settings', async (req, res) => {
   try {
-    res.json({ success: true, data: getSystemSettings() });
+    const settings = pg.isPgEnabled() ? await pg.getSystemSettings() : getSystemSettings();
+    res.json({ success: true, data: settings });
   } catch (error) {
     res.status(error.status || 500).json({ success: false, error: error.message });
   }
 });
 
-router.patch('/settings', (req, res) => {
+router.patch('/settings', async (req, res) => {
   try {
-    requireSystemRole(req, ['Super Admin', 'Admin']);
-    res.json({ success: true, data: updateSystemSettings(req.body || {}) });
+    if (pg.isPgEnabled()) await requireSystemRoleAsync(req, ['Super Admin', 'Admin']);
+    else requireSystemRole(req, ['Super Admin', 'Admin']);
+    const updated = pg.isPgEnabled() ? await pg.updateSystemSettings(req.body || {}) : updateSystemSettings(req.body || {});
+    res.json({ success: true, data: updated });
   } catch (error) {
     res.status(error.status || 400).json({ success: false, error: error.message });
   }
@@ -225,6 +281,9 @@ router.patch('/settings', (req, res) => {
 
 router.get('/backups', (req, res) => {
   try {
+    if (pg.isPgEnabled()) {
+      return res.status(501).json({ success: false, error: 'Backups are not supported on Postgres deployments.' });
+    }
     requireSystemRole(req, ['Super Admin', 'Admin']);
     res.json({ success: true, data: listBackups() });
   } catch (error) {
@@ -234,6 +293,9 @@ router.get('/backups', (req, res) => {
 
 router.post('/backups', async (req, res) => {
   try {
+    if (pg.isPgEnabled()) {
+      return res.status(501).json({ success: false, error: 'Backups are not supported on Postgres deployments.' });
+    }
     const requester = requireSystemRole(req, ['Super Admin', 'Admin']);
     const backup = await createBackup({
       type: req.body?.type || 'manual',
@@ -247,6 +309,9 @@ router.post('/backups', async (req, res) => {
 
 router.post('/recovery/restore', async (req, res) => {
   try {
+    if (pg.isPgEnabled()) {
+      return res.status(501).json({ success: false, error: 'Restore is not supported on Postgres deployments.' });
+    }
     requireSystemRole(req, ['Super Admin', 'Admin']);
     const restored = await restoreBackup(req.body?.backupName);
     res.json({ success: true, data: restored });
@@ -256,9 +321,11 @@ router.post('/recovery/restore', async (req, res) => {
   }
 });
 
-router.post('/session/heartbeat', (req, res) => {
+router.post('/session/heartbeat', async (req, res) => {
   try {
-    const session = touchSystemSession(req.body?.sessionId, getRequestContext(req));
+    const session = pg.isPgEnabled()
+      ? await pg.touchSystemSession(req.body?.sessionId, getRequestContext(req))
+      : touchSystemSession(req.body?.sessionId, getRequestContext(req));
     res.json({ success: true, data: session });
   } catch (error) {
     const status = /not found/i.test(error.message) ? 404 : 400;
@@ -266,9 +333,10 @@ router.post('/session/heartbeat', (req, res) => {
   }
 });
 
-router.post('/session/logout', (req, res) => {
+router.post('/session/logout', async (req, res) => {
   try {
-    closeSystemSession(req.body?.sessionId);
+    if (pg.isPgEnabled()) await pg.closeSystemSession(req.body?.sessionId);
+    else closeSystemSession(req.body?.sessionId);
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -278,6 +346,17 @@ router.post('/session/logout', (req, res) => {
 router.get('/status', (req, res) => {
   try {
     requireSystemRole(req, ['Super Admin', 'Admin']);
+    if (pg.isPgEnabled()) {
+      return res.json({
+        success: true,
+        data: {
+          backupIntervalHours: 0,
+          dbPath: 'postgres',
+          backupsDir: 'n/a',
+          backupCount: 0,
+        },
+      });
+    }
     const { backupsDir, dbPath } = getStoragePaths();
     res.json({
       success: true,
@@ -295,6 +374,9 @@ router.get('/status', (req, res) => {
 
 router.post('/maintenance', (req, res) => {
   try {
+    if (pg.isPgEnabled()) {
+      return res.status(501).json({ success: false, error: 'Maintenance actions are not supported on Postgres deployments.' });
+    }
     requireSystemRole(req, ['Super Admin', 'Admin']);
     const result = runMaintenanceAction(req.body?.action);
     res.json({ success: true, data: result });

@@ -55,7 +55,11 @@ function ensureDir(dirPath) {
 }
 
 function getSafeStoragePaths() {
-  const rootDir = process.env.VERCEL ? path.join(os.tmpdir(), 'zaya-runtime') : process.cwd();
+  // If the configured path is not writable/doesn't exist (common on locked-down installs),
+  // fall back to a per-user directory that should always be writable.
+  const rootDir = process.env.VERCEL
+    ? path.join(os.tmpdir(), 'zaya-runtime')
+    : path.join(os.homedir(), '.zaya-calling-system');
   const dataDir = path.join(rootDir, 'data');
   const backupsDir = path.join(rootDir, 'backups');
   return {

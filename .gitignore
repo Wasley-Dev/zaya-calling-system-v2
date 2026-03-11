@@ -12,3 +12,4 @@ uploads/
 dist/*.exe
 dist/*.blockmap
 dist/win-unpacked/
+dist/

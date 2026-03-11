@@ -6,6 +6,7 @@ const { autoUpdater } = require('electron-updater');
 const { startServer } = require('../server');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
+const DEFAULT_REMOTE_URL = 'https://zaya-v2-navy.vercel.app';
 let mainWindow = null;
 let runtimeServer = null;
 let logFilePath = null;
@@ -105,19 +106,14 @@ function scheduleAutoUpdateChecks() {
 }
 
 async function createMainWindow() {
+  const remoteUrl = String(process.env.ZAYA_WEB_URL || DEFAULT_REMOTE_URL).trim();
+  const forceEmbedded = String(process.env.ZAYA_EMBEDDED_SERVER || '').trim() === '1';
+  const useEmbeddedServer = !app.isPackaged || forceEmbedded;
+
   const runtimeRoot = path.join(app.getPath('userData'), 'runtime');
-  writeLog(`Starting desktop app with runtime root: ${runtimeRoot}`);
+  writeLog(`Starting desktop app. packaged=${app.isPackaged} embedded=${useEmbeddedServer} runtimeRoot=${runtimeRoot}`);
 
   try {
-    const { port, server } = await startServer({
-      port: 0,
-      host: '127.0.0.1',
-      projectRoot: PROJECT_ROOT,
-      runtimeRoot,
-    });
-
-    runtimeServer = server;
-    writeLog(`Embedded server started on port ${port}`);
     mainWindow = new BrowserWindow({
       width: 1440,
       height: 920,
@@ -139,8 +135,22 @@ async function createMainWindow() {
       mainWindow = null;
     });
 
-    writeLog(`Loading UI from http://127.0.0.1:${port}`);
-    await mainWindow.loadURL(`http://127.0.0.1:${port}`);
+    if (useEmbeddedServer) {
+      const { port, server } = await startServer({
+        port: 0,
+        host: '127.0.0.1',
+        projectRoot: PROJECT_ROOT,
+        runtimeRoot,
+      });
+
+      runtimeServer = server;
+      writeLog(`Embedded server started on port ${port}`);
+      writeLog(`Loading UI from http://127.0.0.1:${port}`);
+      await mainWindow.loadURL(`http://127.0.0.1:${port}`);
+    } else {
+      writeLog(`Loading UI from remote ${remoteUrl}`);
+      await mainWindow.loadURL(remoteUrl);
+    }
     writeLog('UI loaded successfully');
     configureAutoUpdates();
     scheduleAutoUpdateChecks();
