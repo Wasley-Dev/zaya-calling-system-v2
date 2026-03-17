@@ -6,7 +6,7 @@ import { getContact, createContact, updateContact, saveDriver, updateDriver, upl
 import { CALLER_TYPES, STATUS_OPTIONS, STAGE_OPTIONS, BOOKING_OPTIONS, COUNTRIES, LICENSE_CLASSES, VEHICLE_TYPES, CHECK_OPTIONS, CALL_OUTCOMES, PRIORITY_OPTIONS, fmt, fmtDT, fmtAgo, checkClass, outcomeClass, activityColor, initials, parseDocumentItems, getDocumentCoverageGrade, getDocumentGrade, getComplianceStatus, normalizeLicenseNumber, isValidLicenseNumber, normalizeBookingValue } from '../utils/helpers';
 
 const EMPTY_FORM = {
-  First_Name:'', Last_Name:'', Job_Title:'', Mobile_Phone:'', E_mail_Address:'',
+  First_Name:'', Last_Name:'', Profile_Name:'', Job_Title:'', Mobile_Phone:'', E_mail_Address:'',
   Address:'', Country_Region:'Zanzibar', Caller_Type:'DRIVER',
   Status:'Pending', Stage:'1 - New Caller', Booking:'', Documentations:'',
   Remarks:'', Notes:'', Priority:'Normal', Assigned_To:'', Next_Call_Date:'',
@@ -37,6 +37,29 @@ export default function ContactForm() {
   const [systemUsers,setSystemUsers]= useState([]);
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  function contactDisplayName(nextForm = form) {
+    const profile = String(nextForm.Profile_Name || '').trim();
+    const full = `${nextForm.First_Name || ''} ${nextForm.Last_Name || ''}`.trim();
+    return profile || full || 'Contact';
+  }
+
+  function contactInitials(nextForm = form) {
+    const profile = String(nextForm.Profile_Name || '').trim();
+    if (profile) {
+      const parts = profile.split(/\s+/).filter(Boolean);
+      return initials(parts[0] || '', parts.slice(1).join(' '));
+    }
+    return initials(nextForm.First_Name, nextForm.Last_Name);
+  }
+
+  function normalizeLicenseClassValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const cleaned = raw.replace(/^class\s+/i, '').replace(/\s+/g, '').toUpperCase();
+    if (cleaned.includes('+') && cleaned.includes('E')) return 'E';
+    return cleaned;
+  }
+
   function fileToDataUrl(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -56,10 +79,11 @@ export default function ContactForm() {
   }
 
   function buildContactPrintHtml() {
-    const fullName = `${form.First_Name || ''} ${form.Last_Name || ''}`.trim() || 'Contact';
+    const fullName = contactDisplayName();
     const subtitle = (form.Job_Title || form.Caller_Type || '').trim();
     const photo = String(form.Avatar_URL || '').trim();
     const rows = [
+      ['Candidate Profile Name', form.Profile_Name],
       ['Role', form.Caller_Type],
       ['Status', form.Status],
       ['Stage', form.Stage],
@@ -75,7 +99,7 @@ export default function ContactForm() {
     ].filter(([, v]) => String(v || '').trim());
 
     const driverRows = form.Caller_Type === 'DRIVER' ? [
-      ['Driver Name', driver.DriverName || `${form.First_Name} ${form.Last_Name}`.trim()],
+      ['Driver Name', driver.DriverName || contactDisplayName()],
       ['Licence No.', driver.LicenseNumber],
       ['Licence Class', driver.LicenseClass],
       ['Issue Date', driver.LicenseIssueDate],
@@ -183,7 +207,7 @@ export default function ContactForm() {
 
   function doDownload() {
     const html = buildContactPrintHtml();
-    const fullName = `${form.First_Name || ''} ${form.Last_Name || ''}`.trim() || 'contact';
+    const fullName = contactDisplayName();
     const safe = fullName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'contact';
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -208,6 +232,7 @@ export default function ContactForm() {
       const c = r.data.data;
       setForm({
         First_Name: c.First_Name||'', Last_Name: c.Last_Name||'',
+        Profile_Name: c.Profile_Name||'',
         Job_Title: c.Job_Title||'', Mobile_Phone: c.Mobile_Phone||'',
         E_mail_Address: c.E_mail_Address||'', Address: c.Address||'',
         Country_Region: c.Country_Region||'Zanzibar',
@@ -225,7 +250,7 @@ export default function ContactForm() {
       if (c.DriverDetailID) {
         setDriver({
           DriverName: c.DriverName||'', LicenseNumber: c.LicenseNumber||'',
-          LicenseClass: c.LicenseClass||'', LicenseIssueDate: c.LicenseIssueDate||'',
+          LicenseClass: normalizeLicenseClassValue(c.LicenseClass||''), LicenseIssueDate: c.LicenseIssueDate||'',
           LicenseExpiryDate: c.LicenseExpiryDate||'', DVLACheck: c.DVLACheck||'Pending',
           DBSCheck: c.DBSCheck||'Pending', PCOCheck: c.PCOCheck||'Pending',
           VehicleType: c.VehicleType||'', Notes: c.DriverNotes||'',
@@ -243,14 +268,18 @@ export default function ContactForm() {
   const licensePreview = normalizeLicenseNumber(driver.LicenseNumber);
 
   async function handleSave() {
-    if (!form.First_Name.trim()) { toast.error('First name required'); return; }
+    if (!String(form.Profile_Name || '').trim() && !String(form.First_Name || '').trim()) {
+      toast.error('Name required (Profile Name or First Name).');
+      return;
+    }
     if (form.Caller_Type === 'DRIVER') {
       const normalizedLicense = normalizeLicenseNumber(driver.LicenseNumber);
       if (normalizedLicense && !isValidLicenseNumber(normalizedLicense)) {
         toast.error('Licence number must use the format Z- followed by numbers.');
         return;
       }
-      if (driver.LicenseClass && !LICENSE_CLASSES.includes(driver.LicenseClass)) {
+      const normalizedClass = normalizeLicenseClassValue(driver.LicenseClass);
+      if (normalizedClass && !LICENSE_CLASSES.includes(normalizedClass)) {
         toast.error('Select a valid ZARTSA licence class.');
         return;
       }
@@ -272,9 +301,10 @@ export default function ContactForm() {
         const payload = {
           ...driver,
           LicenseNumber: normalizeLicenseNumber(driver.LicenseNumber),
+          LicenseClass: normalizeLicenseClassValue(driver.LicenseClass),
           CallLogsID: cid,
         };
-        if (!payload.DriverName) payload.DriverName = `${form.First_Name} ${form.Last_Name}`;
+        if (!payload.DriverName) payload.DriverName = contactDisplayName(normalizedForm);
         if (drvId) {
           const response = await updateDriver(drvId, payload);
           if (response?.data?.queued) toast.success('Driver details queued offline');
@@ -379,10 +409,10 @@ export default function ContactForm() {
           <button className="btn btn-secondary btn-icon" onClick={() => navigate(-1)}><ArrowLeft size={15}/></button>
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
             {isEdit && (form.Avatar_URL
-              ? <img src={form.Avatar_URL} alt={`${form.First_Name} ${form.Last_Name}`} className="profile-avatar profile-avatar-sm" style={{ width: 38, height: 38, borderRadius: 14 }} />
-              : <div className="avatar" style={{ width:38,height:38,fontSize:14 }}>{initials(form.First_Name,form.Last_Name)}</div>)}
+              ? <img src={form.Avatar_URL} alt={contactDisplayName()} className="profile-avatar profile-avatar-sm" style={{ width: 38, height: 38, borderRadius: 14 }} />
+              : <div className="avatar" style={{ width:38,height:38,fontSize:14 }}>{contactInitials()}</div>)}
             <div>
-              <div className="pg-title">{isEdit ? `${form.First_Name} ${form.Last_Name}` : 'New Contact'}</div>
+              <div className="pg-title">{isEdit ? contactDisplayName() : 'New Contact'}</div>
               <div className="pg-subtitle">{isEdit ? form.Job_Title || form.Caller_Type : 'Fill in the details below'}</div>
             </div>
           </div>
@@ -421,7 +451,7 @@ export default function ContactForm() {
             <div className="card">
               <div className="card-title">Personal Information</div>
               <div className="profile-hero" style={{ marginBottom: 14 }}>
-                {form.Avatar_URL ? <img src={form.Avatar_URL} alt={`${form.First_Name} ${form.Last_Name}`.trim() || 'Contact'} className="profile-avatar profile-avatar-lg" /> : <div className="avatar profile-avatar-lg">{initials(form.First_Name, form.Last_Name)}</div>}
+                {form.Avatar_URL ? <img src={form.Avatar_URL} alt={contactDisplayName()} className="profile-avatar profile-avatar-lg" /> : <div className="avatar profile-avatar-lg">{contactInitials()}</div>}
                 <div>
                   <div className="profile-greeting">Contact Photo</div>
                   <div className="form-hint">Add a picture to make the record easier to recognize.</div>
@@ -442,8 +472,12 @@ export default function ContactForm() {
                 <label className="form-label">Contact Photo URL</label>
                 <input className="form-input" value={form.Avatar_URL || ''} onChange={f('Avatar_URL')} placeholder="https://... or paste an image data URL" />
               </div>
+              <div className="form-group">
+                <label className="form-label">Candidate Profile Name</label>
+                <input className="form-input" value={form.Profile_Name} onChange={f('Profile_Name')} placeholder="e.g. Asha Omar (preferred display name)" />
+              </div>
               <div className="form-row cols-2">
-                <div className="form-group"><label className="form-label">First Name *</label><input className="form-input" value={form.First_Name} onChange={f('First_Name')} placeholder="First name"/></div>
+                <div className="form-group"><label className="form-label">First Name</label><input className="form-input" value={form.First_Name} onChange={f('First_Name')} placeholder="First name"/></div>
                 <div className="form-group"><label className="form-label">Last Name</label><input className="form-input" value={form.Last_Name} onChange={f('Last_Name')} placeholder="Last name"/></div>
               </div>
               <div className="form-group"><label className="form-label">Job Title</label><input className="form-input" value={form.Job_Title} onChange={f('Job_Title')} placeholder="e.g. Driver, Manager"/></div>
@@ -754,7 +788,7 @@ export default function ContactForm() {
         <div className="overlay" onClick={() => setCallModal(false)}>
           <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-hd">
-              <div className="modal-ttl">Log Call — {form.First_Name} {form.Last_Name}</div>
+              <div className="modal-ttl">Log Call — {contactDisplayName()}</div>
               <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setCallModal(false)}><X size={16}/></button>
             </div>
             <div className="modal-bd">

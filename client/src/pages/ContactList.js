@@ -42,6 +42,19 @@ export default function ContactList() {
   const [view,        setView]       = useState('table'); // table | kanban
   const overdue = sp.get('overdue') === 'true';
 
+  const displayName = c => String(c?.Profile_Name || '').trim()
+    || `${c?.First_Name || ''} ${c?.Last_Name || ''}`.trim()
+    || 'Contact';
+
+  const displayInitials = c => {
+    const profile = String(c?.Profile_Name || '').trim();
+    if (profile) {
+      const parts = profile.split(/\s+/).filter(Boolean);
+      return initials(parts[0] || '', parts.slice(1).join(' '));
+    }
+    return initials(c?.First_Name, c?.Last_Name);
+  };
+
   useEffect(() => {
     setSearch(sp.get('search') || '');
     setFType(sp.get('caller_type') || '');
@@ -173,10 +186,10 @@ export default function ContactList() {
                       <div key={c.ID} className="pipe-card" onClick={() => navigate(`/contacts/${c.ID}/edit`)}>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                           {c.Avatar_URL
-                            ? <img src={c.Avatar_URL} alt={`${c.First_Name} ${c.Last_Name}`} className="profile-avatar profile-avatar-sm" style={{ width: 28, height: 28, borderRadius: 10, flexShrink: 0 }} />
-                            : <div className="avatar" style={{ width: 28, height: 28, fontSize: 10, flexShrink: 0 }}>{initials(c.First_Name,c.Last_Name)}</div>}
+                            ? <img src={c.Avatar_URL} alt={displayName(c)} className="profile-avatar profile-avatar-sm" style={{ width: 28, height: 28, borderRadius: 10, flexShrink: 0 }} />
+                            : <div className="avatar" style={{ width: 28, height: 28, fontSize: 10, flexShrink: 0 }}>{displayInitials(c)}</div>}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.First_Name} {c.Last_Name}</div>
+                            <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName(c)}</div>
                             <div style={{ fontSize: 11, color: 'var(--txt2)' }}>{c.Mobile_Phone}</div>
                           </div>
                           {c.Priority === 'High' && <span className="prio-dot prio-high" style={{ marginTop: 5 }} />}
@@ -224,10 +237,10 @@ export default function ContactList() {
                       <td>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                           {c.Avatar_URL
-                            ? <img src={c.Avatar_URL} alt={`${c.First_Name} ${c.Last_Name}`} className="profile-avatar profile-avatar-sm" />
-                            : <div className="avatar">{initials(c.First_Name,c.Last_Name)}</div>}
+                            ? <img src={c.Avatar_URL} alt={displayName(c)} className="profile-avatar profile-avatar-sm" />
+                            : <div className="avatar">{displayInitials(c)}</div>}
                           <div>
-                            <div style={{ fontWeight: 600 }}>{c.First_Name} {c.Last_Name}</div>
+                            <div style={{ fontWeight: 600 }}>{displayName(c)}</div>
                             {c.Job_Title && <div style={{ fontSize: 11.5, color: 'var(--txt2)' }}>{c.Job_Title}</div>}
                           </div>
                         </div>

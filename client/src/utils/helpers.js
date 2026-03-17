@@ -11,8 +11,9 @@ export const STAGE_OPTIONS = ['1 - New Caller', '2 - Training', '1 - Interview',
 export const BOOKING_OPTIONS = ['1 - New Caller', '2 - Callbacks'];
 export const PRIORITY_OPTIONS = ['High', 'Normal', 'Low'];
 export const COUNTRIES = ['Tanzania Mainland', 'Zanzibar', 'Kenya', 'Uganda', 'Rwanda', 'Burundi', 'Democratic Republic of the Congo', 'Malawi', 'Mozambique', 'South Africa', 'Nigeria', 'Ghana', 'Other'];
-export const LICENSE_CLASSES = ['M', 'A', 'B1', 'C1', 'B', 'C', 'D1', 'E', 'D', 'G'];
-export const VEHICLE_TYPES = ['Car', 'Van', 'HGV', 'Minibus', 'Motorcycle', 'Other'];
+// Classes commonly used across Zanzibar and Tanzania Mainland licensing.
+export const LICENSE_CLASSES = ['M', 'A', 'B1', 'B', 'C1', 'C', 'D1', 'D', 'E', 'G'];
+export const VEHICLE_TYPES = ['Car', 'Civil Bus', 'HGV', 'Minibus', 'Motorcycle', 'Other', 'School Bus', 'Van'];
 export const CHECK_OPTIONS = ['Pending', 'Approved', 'Rejected', 'Not Required'];
 export const CALL_OUTCOMES = ['Successful', 'No Answer', 'Callback Requested', 'Voicemail Left', 'Wrong Number', 'Not Interested'];
 export const ASSIGNEES = ['Sarah', 'Mike', 'James', 'Lisa', ''];

@@ -1,6 +1,6 @@
 {
   "name": "zaya-group-calling-system",
-  "version": "2.0.13",
+  "version": "2.0.14",
   "description": "Zaya Group Calling System - Full Stack CRM",
   "main": "electron/main.js",
   "scripts": {

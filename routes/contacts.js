@@ -302,7 +302,7 @@ router.post('/', (req, res) => {
         await pg.ensureSchema();
         const body = req.body || {};
         const {
-          First_Name, Last_Name, Job_Title, Mobile_Phone, E_mail_Address,
+          First_Name, Last_Name, Profile_Name, Job_Title, Mobile_Phone, E_mail_Address,
           Address, Country_Region, Caller_Type, Status, Stage, Booking,
           Documentations, Remarks, Notes, Priority, Assigned_To,
           Next_Call_Date,
@@ -312,15 +312,16 @@ router.post('/', (req, res) => {
         const result = await pg.pgQuery(
           `
           INSERT INTO "CallLogs"
-            ("First_Name","Last_Name","Job_Title","Mobile_Phone","E_mail_Address","Address",
+            ("First_Name","Last_Name","Profile_Name","Job_Title","Mobile_Phone","E_mail_Address","Address",
              "Country_Region","Caller_Type","Status","Stage","Booking","Documentations",
              "Remarks","Notes","Avatar_URL","Priority","Assigned_To","Next_Call_Date","Updated_At")
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,now())
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,now())
           RETURNING *
           `,
           [
             First_Name || '',
             Last_Name || '',
+            Profile_Name || '',
             Job_Title || '',
             Mobile_Phone || '',
             E_mail_Address || '',
@@ -361,7 +362,7 @@ router.post('/', (req, res) => {
   try {
     const db = getDb();
     const {
-      First_Name, Last_Name, Job_Title, Mobile_Phone, E_mail_Address,
+      First_Name, Last_Name, Profile_Name, Job_Title, Mobile_Phone, E_mail_Address,
       Address, Country_Region, Caller_Type, Status, Stage, Booking,
       Documentations, Remarks, Notes, Priority, Assigned_To,
       Avatar_URL,
@@ -370,12 +371,12 @@ router.post('/', (req, res) => {
 
     const result = db.prepare(`
       INSERT INTO CallLogs
-        (First_Name,Last_Name,Job_Title,Mobile_Phone,E_mail_Address,Address,
+        (First_Name,Last_Name,Profile_Name,Job_Title,Mobile_Phone,E_mail_Address,Address,
          Country_Region,Caller_Type,Status,Stage,Booking,Documentations,
          Remarks,Notes,Avatar_URL,Priority,Assigned_To,Next_Call_Date)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
-      First_Name || '', Last_Name || '', Job_Title || '', Mobile_Phone || '',
+      First_Name || '', Last_Name || '', Profile_Name || '', Job_Title || '', Mobile_Phone || '',
       E_mail_Address || '', Address || '', Country_Region || 'United Kingdom',
       Caller_Type || 'DRIVER', Status || 'Pending', Stage || '1 - New Caller',
       Booking || '', Documentations || '', Remarks || '', Notes || '',
@@ -412,7 +413,7 @@ router.put('/:id', (req, res) => {
 
         const body = req.body || {};
         const {
-          First_Name, Last_Name, Job_Title, Mobile_Phone, E_mail_Address,
+          First_Name, Last_Name, Profile_Name, Job_Title, Mobile_Phone, E_mail_Address,
           Address, Country_Region, Caller_Type, Status, Stage, Booking,
           Documentations, Remarks, Notes, Priority, Assigned_To,
           Avatar_URL,
@@ -422,15 +423,16 @@ router.put('/:id', (req, res) => {
         await pg.pgQuery(
           `
           UPDATE "CallLogs" SET
-            "First_Name"=$1,"Last_Name"=$2,"Job_Title"=$3,"Mobile_Phone"=$4,"E_mail_Address"=$5,
-            "Address"=$6,"Country_Region"=$7,"Caller_Type"=$8,"Status"=$9,"Stage"=$10,"Booking"=$11,
-            "Documentations"=$12,"Remarks"=$13,"Notes"=$14,"Avatar_URL"=$15,"Priority"=$16,"Assigned_To"=$17,
-            "Last_Call_Date"=$18,"Next_Call_Date"=$19,"Updated_At"=now()
-          WHERE "ID"=$20
+            "First_Name"=$1,"Last_Name"=$2,"Profile_Name"=$3,"Job_Title"=$4,"Mobile_Phone"=$5,"E_mail_Address"=$6,
+            "Address"=$7,"Country_Region"=$8,"Caller_Type"=$9,"Status"=$10,"Stage"=$11,"Booking"=$12,
+            "Documentations"=$13,"Remarks"=$14,"Notes"=$15,"Avatar_URL"=$16,"Priority"=$17,"Assigned_To"=$18,
+            "Last_Call_Date"=$19,"Next_Call_Date"=$20,"Updated_At"=now()
+          WHERE "ID"=$21
           `,
           [
             First_Name,
             Last_Name,
+            Profile_Name,
             Job_Title,
             Mobile_Phone,
             E_mail_Address,
@@ -472,7 +474,7 @@ router.put('/:id', (req, res) => {
     if (!old) return res.status(404).json({ success: false, error: 'Not found' });
 
     const {
-      First_Name, Last_Name, Job_Title, Mobile_Phone, E_mail_Address,
+      First_Name, Last_Name, Profile_Name, Job_Title, Mobile_Phone, E_mail_Address,
       Address, Country_Region, Caller_Type, Status, Stage, Booking,
       Documentations, Remarks, Notes, Priority, Assigned_To,
       Avatar_URL,
@@ -481,13 +483,13 @@ router.put('/:id', (req, res) => {
 
     db.prepare(`
       UPDATE CallLogs SET
-        First_Name=?,Last_Name=?,Job_Title=?,Mobile_Phone=?,E_mail_Address=?,
+        First_Name=?,Last_Name=?,Profile_Name=?,Job_Title=?,Mobile_Phone=?,E_mail_Address=?,
         Address=?,Country_Region=?,Caller_Type=?,Status=?,Stage=?,Booking=?,
         Documentations=?,Remarks=?,Notes=?,Avatar_URL=?,Priority=?,Assigned_To=?,
         Last_Call_Date=?,Next_Call_Date=?,Updated_At=CURRENT_TIMESTAMP
       WHERE ID=?
     `).run(
-      First_Name, Last_Name, Job_Title, Mobile_Phone, E_mail_Address,
+      First_Name, Last_Name, Profile_Name, Job_Title, Mobile_Phone, E_mail_Address,
       Address, Country_Region, Caller_Type, Status, Stage, Booking,
       Documentations, Remarks, Notes, String(Avatar_URL || '').trim(), Priority, Assigned_To,
       Last_Call_Date || null, Next_Call_Date || null, id

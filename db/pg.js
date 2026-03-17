@@ -154,6 +154,7 @@ async function ensureSchema() {
       "ID"              BIGSERIAL PRIMARY KEY,
       "First_Name"      TEXT NOT NULL DEFAULT '',
       "Last_Name"       TEXT DEFAULT '',
+      "Profile_Name"    TEXT DEFAULT '',
       "Job_Title"       TEXT DEFAULT '',
       "Mobile_Phone"    TEXT DEFAULT '',
       "E_mail_Address"  TEXT DEFAULT '',
@@ -178,6 +179,7 @@ async function ensureSchema() {
     );
 
     ALTER TABLE "CallLogs" ADD COLUMN IF NOT EXISTS "Avatar_URL" TEXT DEFAULT '';
+    ALTER TABLE "CallLogs" ADD COLUMN IF NOT EXISTS "Profile_Name" TEXT DEFAULT '';
 
     CREATE TABLE IF NOT EXISTS "DriverDetails" (
       "DriverDetailID"    BIGSERIAL PRIMARY KEY,
@@ -348,7 +350,6 @@ async function ensureSchema() {
       INSERT INTO "SystemUsers" ("Name","Email","Role","Password_Salt","Password_Hash","IsActive","Updated_At")
       VALUES ($1,$2,'Super Admin',$3,$4,true,now())
       ON CONFLICT ("Email") DO UPDATE SET
-        "Name" = EXCLUDED."Name",
         "Role" = 'Super Admin',
         "Password_Salt" = EXCLUDED."Password_Salt",
         "Password_Hash" = EXCLUDED."Password_Hash",
@@ -869,6 +870,7 @@ async function restoreSystemBackup(backupName) {
         'ID',
         'First_Name',
         'Last_Name',
+        'Profile_Name',
         'Job_Title',
         'Mobile_Phone',
         'E_mail_Address',

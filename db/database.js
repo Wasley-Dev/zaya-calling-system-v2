@@ -180,6 +180,7 @@ function initializeSchema() {
       ID              INTEGER PRIMARY KEY AUTOINCREMENT,
       First_Name      TEXT    NOT NULL DEFAULT '',
       Last_Name       TEXT    DEFAULT '',
+      Profile_Name    TEXT    DEFAULT '',
       Job_Title       TEXT    DEFAULT '',
       Mobile_Phone    TEXT    DEFAULT '',
       E_mail_Address  TEXT    DEFAULT '',
@@ -292,6 +293,9 @@ function initializeSchema() {
   try {
     database.prepare(`ALTER TABLE CallLogs ADD COLUMN Avatar_URL TEXT DEFAULT ''`).run();
   } catch (_) {}
+  try {
+    database.prepare(`ALTER TABLE CallLogs ADD COLUMN Profile_Name TEXT DEFAULT ''`).run();
+  } catch (_) {}
 
   const userColumns = database.prepare("PRAGMA table_info(SystemUsers)").all();
   if (!userColumns.some(column => column.name === 'Avatar_URL')) {
@@ -387,9 +391,9 @@ function ensureBootstrapAdmin() {
   if (existing) {
     database.prepare(`
       UPDATE SystemUsers
-      SET Name = ?, Role = ?, Password_Salt = ?, Password_Hash = ?, IsActive = 1, Updated_At = CURRENT_TIMESTAMP
+      SET Role = ?, Password_Salt = ?, Password_Hash = ?, IsActive = 1, Updated_At = CURRENT_TIMESTAMP
       WHERE UserID = ?
-    `).run('Zaya Operations', 'Super Admin', salt, hash, existing.UserID);
+    `).run('Super Admin', salt, hash, existing.UserID);
     return;
   }
 
