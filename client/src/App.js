@@ -54,6 +54,7 @@ import {
 
 const AUTH_KEY = 'zaya-auth-session';
 const REMEMBER_ME_KEY = 'zaya-remember-me';
+const LAST_LOGIN_ID_KEY = 'zaya-last-login-id';
 const THEME_KEY = 'zaya-theme';
 const ORIENTATION_KEY = 'zaya-ai-orientation-complete';
 const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com';
@@ -190,7 +191,10 @@ function UpdateBanner({ updateInfo, onRefresh, syncInfo, onSyncNow }) {
 function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe, syncInfo, onSyncNow }) {
   const branding = normalizeSettings(settings);
   const rotatingExperience = getRotatingLoginExperience(branding);
-  const [email, setEmail] = useState(DEFAULT_USER.email);
+  const [email, setEmail] = useState(() => {
+    if (!initialRememberMe) return '';
+    return localStorage.getItem(LAST_LOGIN_ID_KEY) || '';
+  });
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(initialRememberMe);
   const [error, setError] = useState('');
@@ -202,6 +206,11 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
     setSubmitting(true);
     try {
       const response = await loginToSystem({ email: email.trim().toLowerCase(), password });
+      if (rememberMe) {
+        localStorage.setItem(LAST_LOGIN_ID_KEY, email.trim());
+      } else {
+        localStorage.removeItem(LAST_LOGIN_ID_KEY);
+      }
       onLogin(response.data.data, rememberMe);
     } catch (err) {
       setError(err?.response?.data?.error || 'Login failed. Check the configured credentials.');
@@ -267,15 +276,31 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
           </div>
           <form onSubmit={handleSubmit} className="auth-form">
             <label className="form-group">
-              <span className="form-label">Email</span>
-              <input className="form-input" value={email} onChange={event => setEmail(event.target.value)} />
+              <span className="form-label">Email or username</span>
+              <input
+                className="form-input"
+                value={email}
+                onChange={event => setEmail(event.target.value)}
+                placeholder="Enter email or username"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
             </label>
             <label className="form-group">
               <span className="form-label">Password</span>
               <input className="form-input" type="password" value={password} onChange={event => setPassword(event.target.value)} />
             </label>
             <label className="remember-row">
-              <input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)} />
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={event => {
+                  const nextValue = event.target.checked;
+                  setRememberMe(nextValue);
+                  if (!nextValue) localStorage.removeItem(LAST_LOGIN_ID_KEY);
+                }}
+              />
               <span>Remember me</span>
             </label>
             {error ? <div className="alert alert-error">{error}</div> : null}

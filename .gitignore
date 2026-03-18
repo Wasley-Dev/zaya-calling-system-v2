@@ -2,6 +2,7 @@ node_modules/
 client/node_modules/
 client/node_modules_npm_broken_*/
 client/build/
+.npm-cache/
 data/
 uploads/
 .env
