@@ -67,7 +67,7 @@ zaya-calling-system-v2/
 ├── .env                       # Config (PORT, DB_PATH)
 │
 ├── db/
-│   └── database.js            # SQLite schema, seed data
+│   └── database.js            # SQLite schema, bootstrap admin
 │
 ├── routes/
 │   ├── contacts.js            # CRUD + calls + attachments

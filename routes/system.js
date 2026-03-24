@@ -388,10 +388,23 @@ router.get('/status', (req, res) => {
 router.post('/maintenance', (req, res) => {
   try {
     if (pg.isPgEnabled()) {
+      const action = String(req.body?.action || '').trim();
+      if (action === 'purge-demo-data') {
+        requireSystemRoleAsync(req, ['Super Admin'])
+          .then(() => pg.runMaintenanceActionPg(action))
+          .then(result => res.json({ success: true, data: result }))
+          .catch(error => res.status(error.status || 400).json({ success: false, error: error.message }));
+        return;
+      }
       return res.status(501).json({ success: false, error: 'Maintenance actions are not supported on Postgres deployments.' });
     }
-    requireSystemRole(req, ['Super Admin', 'Admin']);
-    const result = runMaintenanceAction(req.body?.action);
+    const action = String(req.body?.action || '').trim();
+    if (action === 'purge-demo-data') {
+      requireSystemRole(req, ['Super Admin']);
+    } else {
+      requireSystemRole(req, ['Super Admin', 'Admin']);
+    }
+    const result = runMaintenanceAction(action);
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(error.status || 400).json({ success: false, error: error.message });

@@ -980,11 +980,21 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                 <button className="btn btn-secondary" onClick={() => runMaintenance('checkpoint')} disabled={busy}>Run Checkpoint</button>
                 <button className="btn btn-secondary" onClick={() => runMaintenance('vacuum')} disabled={busy}>Optimize Database</button>
                 <button className="btn btn-secondary" onClick={() => runMaintenance('clear-offline-sessions')} disabled={busy}>Clear Offline Sessions</button>
+                <button
+                  className="btn btn-danger"
+                  onClick={() => {
+                    if (!window.confirm('This will permanently delete all contacts, call history, driver details, and activity logs from this machine. Continue?')) return;
+                    runMaintenance('purge-demo-data');
+                  }}
+                  disabled={busy}
+                >
+                  Purge Demo Data
+                </button>
               </div>
             </div>
             <div className="card">
               <div className="card-title">Maintenance Notes</div>
-              <div className="form-hint">Use checkpoints before backups, vacuum when the local database needs cleanup, and clear offline sessions if live-user tracking looks stale.</div>
+              <div className="form-hint">Use checkpoints before backups, vacuum when the local database needs cleanup, clear offline sessions if live-user tracking looks stale, and purge demo data once before entering official records.</div>
             </div>
           </div>
         ) : null}

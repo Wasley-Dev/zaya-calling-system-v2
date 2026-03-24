@@ -362,8 +362,7 @@ function initializeSchema() {
       AND (Setting_Value = '[]' OR Setting_Value = '["Development velocity improves when teams document decisions once and reuse them everywhere.","Consistent follow-up habits drive more growth than last-minute bursts of activity.","Shared dashboards reduce status meetings and increase execution time.","Productivity scales when teams remove duplicate entry and standardize workflows.","Clear ownership shortens delivery cycles and improves operational quality.","Small process improvements compound into major output gains over a quarter.","Growth is easier to sustain when reporting, calling, and compliance stay in one system.","Strong internal tools reduce friction for both managers and frontline teams."]')
   `).run(JSON.stringify(DEFAULT_SYSTEM_SETTINGS.facts));
 
-  const count = database.prepare('SELECT COUNT(*) as c FROM CallLogs').get();
-  if (count.c === 0) seedData();
+  // Intentionally do not seed demo/sample records.
 }
 
 function seedSystemSettings() {
@@ -380,15 +379,22 @@ function seedSystemSettings() {
 }
 
 function ensureBootstrapAdmin() {
-  const email = normalizeEmail(process.env.ADMIN_EMAIL || ROOT_SYSTEM_EMAIL);
-  const password = String(process.env.ADMIN_PASSWORD || 'Kingsley06#').trim();
+  const database = db;
+  const userCount = Number(database.prepare('SELECT COUNT(*) as c FROM SystemUsers').get()?.c || 0);
+
+  const configuredEmail = normalizeEmail(process.env.ADMIN_EMAIL || '');
+  const email = configuredEmail || ROOT_SYSTEM_EMAIL;
+
+  const configuredPassword = String(process.env.ADMIN_PASSWORD || '').trim();
+  const shouldGeneratePassword = userCount === 0 && !configuredPassword;
+  const password = shouldGeneratePassword ? crypto.randomBytes(18).toString('hex') : configuredPassword;
   if (!email || !password) return;
 
-  const database = db;
   const existing = database.prepare('SELECT UserID FROM SystemUsers WHERE Email = ?').get(email);
   const { salt, hash } = createPasswordHash(password);
 
   if (existing) {
+    if (!configuredPassword) return;
     database.prepare(`
       UPDATE SystemUsers
       SET Role = ?, Password_Salt = ?, Password_Hash = ?, IsActive = 1, Updated_At = CURRENT_TIMESTAMP
@@ -401,6 +407,27 @@ function ensureBootstrapAdmin() {
     INSERT INTO SystemUsers (Name, Email, Role, Password_Salt, Password_Hash, IsActive)
     VALUES (?, ?, ?, ?, ?, 1)
   `).run('Zaya Operations', email, 'Super Admin', salt, hash);
+
+  if (shouldGeneratePassword) {
+    try {
+      const { dataDir } = ensureStorageDirs();
+      const credentialsPath = path.join(dataDir, 'bootstrap-admin.txt');
+      fs.writeFileSync(
+        credentialsPath,
+        [
+          `Bootstrap admin created at ${new Date().toISOString()}`,
+          `Email: ${email}`,
+          `Password: ${password}`,
+          '',
+          'After logging in, change the password immediately and delete this file.',
+          '',
+        ].join('\n'),
+        'utf8'
+      );
+    } catch (_) {
+      // ignore file-write failures (locked down installs)
+    }
+  }
 }
 
 function listSystemUsers() {
@@ -757,6 +784,29 @@ function runMaintenanceAction(action) {
     `).run();
     return { action: normalizedAction, message: `Removed ${result.changes || 0} offline session(s).` };
   }
+  if (normalizedAction === 'purge-demo-data') {
+    const tables = ['CallSessions', 'DriverDetails', 'ActivityLog', 'CallLogs'];
+    const totals = database.transaction(() => {
+      const deleted = {};
+      tables.forEach(tableName => {
+        deleted[tableName] = database.prepare(`DELETE FROM ${tableName}`).run().changes || 0;
+      });
+      try {
+        database.prepare(
+          `DELETE FROM sqlite_sequence WHERE name IN (${tables.map(() => '?').join(',')})`
+        ).run(...tables);
+      } catch (_) {
+        // sqlite_sequence doesn't exist unless AUTOINCREMENT was used; ignore.
+      }
+      return deleted;
+    })();
+    const total = Object.values(totals).reduce((sum, value) => sum + Number(value || 0), 0);
+    return {
+      action: normalizedAction,
+      message: `Purged demo/workspace data (${total} record(s) removed).`,
+      deleted: totals,
+    };
+  }
 
   throw new Error('Unknown maintenance action.');
 }
@@ -844,112 +894,6 @@ async function restoreBackup(backupName) {
     restored: getBackupMetadata(backupPath),
     currentUsers: listSystemUsers().length,
   };
-}
-
-function seedData() {
-  const ic = db.prepare(`
-    INSERT INTO CallLogs
-      (First_Name,Last_Name,Job_Title,Mobile_Phone,E_mail_Address,Address,
-       Country_Region,Caller_Type,Status,Stage,Booking,Remarks,Notes,Priority,
-       Assigned_To,Call_Count,Last_Call_Date,Next_Call_Date)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `);
-  const id = db.prepare(`
-    INSERT INTO DriverDetails
-      (CallLogsID,DriverName,LicenseNumber,LicenseClass,LicenseIssueDate,LicenseExpiryDate,DVLACheck,DBSCheck,PCOCheck,VehicleType)
-    VALUES (?,?,?,?,?,?,?,?,?,?)
-  `);
-  const ics = db.prepare(`
-    INSERT INTO CallSessions (CallLogsID,Outcome,Duration_Min,Notes,Called_By,Called_At,Next_Action)
-    VALUES (?,?,?,?,?,?,?)
-  `);
-  const ia = db.prepare(`
-    INSERT INTO ActivityLog (CallLogsID,Action,Detail,Entity,Created_By)
-    VALUES (?,?,?,?,?)
-  `);
-
-  db.transaction(() => {
-    const c1 = ic.run('Scott', 'Alisson', 'Driver', '0785550262', 'alie.scoty@gmail.com', '21 Bleeker Street, London', 'United Kingdom', 'DRIVER', 'Approved', '2 - Training', '1 - New Caller', 'Completed first week of training. Very responsive.', 'Night shift preferred. Has own vehicle.', 'High', 'Sarah', 3, '2025-01-14', '2025-01-21');
-    id.run(c1.lastInsertRowid, 'Scott Alisson', 'DVLA-2020-0312', 'Class C', '2020-03-15', '2027-03-15', 'Approved', 'Approved', 'Pending', 'Van');
-    ics.run(c1.lastInsertRowid, 'Successful', 12, 'Discussed training schedule. Starting Monday.', 'Sarah', '2025-01-14 10:30:00', 'Send training docs');
-    ics.run(c1.lastInsertRowid, 'Successful', 8, 'Follow-up. Confirmed start date.', 'Sarah', '2025-01-10 14:00:00', 'Book induction');
-    ia.run(c1.lastInsertRowid, 'Contact Created', 'New driver contact added', 'contact', 'System');
-    ia.run(c1.lastInsertRowid, 'Status Changed', 'Status set to Approved', 'contact', 'Sarah');
-
-    const c2 = ic.run('William', 'King', 'Operations Manager', '07701012345', 'william.king@outlook.com', '20 Church Lane, Birmingham', 'United Kingdom', 'MANAGER', 'Approved', '2 - Training', '1 - New Caller', 'Strong candidate. Previous logistics experience.', 'Available full-time. Salary expectation: 35000 GBP.', 'High', 'Mike', 2, '2025-01-13', '2025-01-20');
-    ia.run(c2.lastInsertRowid, 'Contact Created', 'New manager contact added', 'contact', 'System');
-    ia.run(c2.lastInsertRowid, 'Stage Changed', 'Stage moved to 2 - Training', 'contact', 'Mike');
-
-    const c3 = ic.run('Harry', 'Wilson', 'Driver', '0535654243', 'harry.wilson@gmail.com', '3 Cambridge Road, Cambridge', 'United Kingdom', 'DRIVER', 'Pending', '1 - Interview', '2 - Callbacks', 'Called twice. Left voicemail.', 'DBS check pending. Awaiting documents.', 'Normal', 'Sarah', 2, '2025-01-12', '2025-01-19');
-    id.run(c3.lastInsertRowid, 'Harry Wilson', 'DVLA-2019-0601', 'Class B', '2019-06-01', '2025-06-01', 'Pending', 'Pending', 'Pending', 'Car');
-    ics.run(c3.lastInsertRowid, 'No Answer', 0, 'Left voicemail', 'Sarah', '2025-01-12 09:00:00', 'Call again tomorrow');
-    ia.run(c3.lastInsertRowid, 'Contact Created', 'New driver contact added', 'contact', 'System');
-    ia.run(c3.lastInsertRowid, 'Call Logged', 'No Answer - left voicemail', 'call', 'Sarah');
-
-    const c4 = ic.run('Emily', 'Clarke', 'Receptionist', '07891234567', 'emily.clarke@gmail.com', '15 High Street, London', 'United Kingdom', 'RECEPTIONIST', 'Pending', '1 - Interview', null, 'Phone interview completed. Strong communication.', 'Immediate availability. Part-time considered.', 'Normal', 'Mike', 1, '2025-01-11', '2025-01-18');
-    ics.run(c4.lastInsertRowid, 'Successful', 25, 'Phone interview. Very professional.', 'Mike', '2025-01-11 11:00:00', 'Schedule in-person interview');
-    ia.run(c4.lastInsertRowid, 'Contact Created', 'New receptionist contact added', 'contact', 'System');
-
-    const c5 = ic.run('Omar', 'Issa', 'Driver', '0535654222', 'omar.issa@gmail.com', 'East London', 'United Kingdom', 'DRIVER', 'Approved', '2 - Training', '1 - New Caller', 'Training progressing well.', 'Night shift. Has TfL licence.', 'High', 'Sarah', 4, '2025-01-15', '2025-01-22');
-    id.run(c5.lastInsertRowid, 'Omar Issa', 'DVLA-2021-0110', 'Class C', '2021-01-10', '2027-01-10', 'Approved', 'Approved', 'Approved', 'Minibus');
-    ics.run(c5.lastInsertRowid, 'Successful', 15, 'Completed induction. Passed theory test.', 'Sarah', '2025-01-15 16:00:00', 'Book practical assessment');
-    ia.run(c5.lastInsertRowid, 'Contact Created', 'New driver contact added', 'contact', 'System');
-    ia.run(c5.lastInsertRowid, 'Compliance Updated', 'PCO check Approved', 'driver', 'Sarah');
-
-    const c6 = ic.run('Seif', 'Hassan', 'Accountant', '07712345678', 'seif.hassan@email.com', 'Manchester', 'United Kingdom', 'ACCOUNTANT', 'Pending', '1 - Interview', null, 'CV received. Strong Excel skills.', 'AAT qualified. 5 years experience.', 'Normal', 'Mike', 1, '2025-01-10', '2025-01-17');
-    ia.run(c6.lastInsertRowid, 'Contact Created', 'New accountant contact added', 'contact', 'System');
-
-    const c7 = ic.run('Amelia', 'King', 'Driver', '07934567890', 'amelia.king@gmail.com', 'Leeds, Yorkshire', 'United Kingdom', 'DRIVER', 'Pending', '1 - New Caller', null, 'Initial enquiry from job board.', 'Newly qualified. Clean licence.', 'Low', 'Sarah', 0, null, '2025-01-16');
-    id.run(c7.lastInsertRowid, 'Amelia King', 'DVLA-2024-0701', 'Class B', '2024-07-01', '2029-07-01', 'Pending', 'Pending', 'Pending', 'Car');
-    ia.run(c7.lastInsertRowid, 'Contact Created', 'New driver contact added', 'contact', 'System');
-
-    const c8 = ic.run('James', 'Roberts', 'Driver', '07855432100', 'james.roberts@outlook.com', 'Bristol', 'United Kingdom', 'DRIVER', 'Approved', '3 - Booked', '1 - New Caller', 'All checks complete. Ready to start.', 'Experienced TfL driver. Excellent references.', 'High', 'Sarah', 5, '2025-01-15', '2025-01-23');
-    id.run(c8.lastInsertRowid, 'James Roberts', 'DVLA-2018-0315', 'Class C+E', '2018-03-15', '2026-03-15', 'Approved', 'Approved', 'Approved', 'HGV');
-    ia.run(c8.lastInsertRowid, 'Contact Created', 'Driver contact added', 'contact', 'System');
-    ia.run(c8.lastInsertRowid, 'Stage Changed', 'Stage moved to 3 - Booked', 'contact', 'Sarah');
-    ia.run(c8.lastInsertRowid, 'Booking Confirmed', 'Booking set to 1 - New Caller', 'contact', 'Sarah');
-
-    // Expand sample dataset to ~50 candidates with varied Caller_Type values (job roles).
-    const firstNames = ['Aisha', 'Noah', 'Liam', 'Sophia', 'Mason', 'Olivia', 'Ethan', 'Mia', 'Lucas', 'Emma', 'Zara', 'Hassan', 'Fatima', 'Daniel', 'Grace'];
-    const lastNames = ['Taylor', 'Brown', 'Davies', 'Evans', 'Thomas', 'Johnson', 'Walker', 'Wright', 'Hughes', 'Green', 'Hall', 'Lewis', 'Clarke', 'Young', 'Allen'];
-    const callerTypes = ['DRIVER', 'MANAGER', 'ACCOUNTANT', 'RECEPTIONIST', 'DISPATCHER', 'COMPLIANCE', 'SALES', 'HR', 'OPERATIONS', 'SUPERVISOR', 'CUSTOMER_SUPPORT'];
-    const jobTitleByType = {
-      DRIVER: 'Driver',
-      MANAGER: 'Operations Manager',
-      ACCOUNTANT: 'Accountant',
-      RECEPTIONIST: 'Receptionist',
-      DISPATCHER: 'Dispatcher',
-      COMPLIANCE: 'Compliance Officer',
-      SALES: 'Sales Executive',
-      HR: 'HR Coordinator',
-      OPERATIONS: 'Operations Associate',
-      SUPERVISOR: 'Shift Supervisor',
-      CUSTOMER_SUPPORT: 'Customer Support',
-    };
-
-    for (let i = 0; i < 42; i += 1) {
-      const fn = firstNames[i % firstNames.length];
-      const ln = lastNames[(i * 3) % lastNames.length];
-      const callerType = callerTypes[i % callerTypes.length];
-      const jobTitle = jobTitleByType[callerType] || 'Candidate';
-      const phone = `07${String(700000000 + i * 791).slice(0, 9)}`;
-      const email = `${fn.toLowerCase()}.${ln.toLowerCase()}${i + 9}@example.com`;
-      const status = i % 7 === 0 ? 'Approved' : 'Pending';
-      const stage = i % 5 === 0 ? '2 - Training' : '1 - New Caller';
-      const priority = i % 9 === 0 ? 'High' : (i % 4 === 0 ? 'Low' : 'Normal');
-      const assignee = i % 2 === 0 ? 'Sarah' : 'Mike';
-      const nextCall = `2025-01-${String(16 + (i % 12)).padStart(2, '0')}`;
-
-      const row = ic.run(fn, ln, jobTitle, phone, email, 'United Kingdom', 'United Kingdom', callerType, status, stage, null, 'Sample candidate', 'Auto-seeded sample record.', priority, assignee, 0, null, nextCall);
-      ia.run(row.lastInsertRowid, 'Contact Created', `Sample ${callerType} candidate seeded`, 'contact', 'System');
-
-      if (callerType === 'DRIVER') {
-        const licenseNo = `DVLA-${2020 + (i % 6)}-${String(1000 + i).padStart(4, '0')}`;
-        const cls = i % 3 === 0 ? 'Class C' : 'Class B';
-        id.run(row.lastInsertRowid, `${fn} ${ln}`, licenseNo, cls, '2021-01-01', '2028-01-01', 'Pending', 'Pending', 'Pending', i % 2 === 0 ? 'Van' : 'Car');
-      }
-    }
-  })();
 }
 
 module.exports = {

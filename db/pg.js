@@ -79,72 +79,6 @@ function getTimestampCompact(date = new Date()) {
   ].join('');
 }
 
-async function seedSampleCandidatesPg() {
-  const firstNames = ['Aisha', 'Noah', 'Liam', 'Sophia', 'Mason', 'Olivia', 'Ethan', 'Mia', 'Lucas', 'Emma', 'Zara', 'Hassan', 'Fatima', 'Daniel', 'Grace'];
-  const lastNames = ['Taylor', 'Brown', 'Davies', 'Evans', 'Thomas', 'Johnson', 'Walker', 'Wright', 'Hughes', 'Green', 'Hall', 'Lewis', 'Clarke', 'Young', 'Allen'];
-  const callerTypes = ['DRIVER', 'MANAGER', 'ACCOUNTANT', 'RECEPTIONIST', 'DISPATCHER', 'COMPLIANCE', 'SALES', 'HR', 'OPERATIONS', 'SUPERVISOR', 'CUSTOMER_SUPPORT'];
-  const jobTitleByType = {
-    DRIVER: 'Driver',
-    MANAGER: 'Operations Manager',
-    ACCOUNTANT: 'Accountant',
-    RECEPTIONIST: 'Receptionist',
-    DISPATCHER: 'Dispatcher',
-    COMPLIANCE: 'Compliance Officer',
-    SALES: 'Sales Executive',
-    HR: 'HR Coordinator',
-    OPERATIONS: 'Operations Associate',
-    SUPERVISOR: 'Shift Supervisor',
-    CUSTOMER_SUPPORT: 'Customer Support',
-  };
-
-  for (let i = 0; i < 50; i += 1) {
-    const fn = firstNames[i % firstNames.length];
-    const ln = lastNames[(i * 3) % lastNames.length];
-    const callerType = callerTypes[i % callerTypes.length];
-    const jobTitle = jobTitleByType[callerType] || 'Candidate';
-    const phone = `07${String(700000000 + i * 791).slice(0, 9)}`;
-    const email = `${fn.toLowerCase()}.${ln.toLowerCase()}${i + 1}@example.com`;
-    const status = i % 7 === 0 ? 'Approved' : 'Pending';
-    const stage = i % 5 === 0 ? '2 - Training' : '1 - New Caller';
-    const priority = i % 9 === 0 ? 'High' : (i % 4 === 0 ? 'Low' : 'Normal');
-    const assignee = i % 2 === 0 ? 'Sarah' : 'Mike';
-    const nextCall = `2025-01-${String(16 + (i % 12)).padStart(2, '0')}`;
-
-    // eslint-disable-next-line no-await-in-loop
-    const inserted = await pgQuery(
-      `
-      INSERT INTO "CallLogs"
-        ("First_Name","Last_Name","Job_Title","Mobile_Phone","E_mail_Address","Address","Country_Region",
-         "Caller_Type","Status","Stage","Booking","Remarks","Notes","Priority","Assigned_To","Next_Call_Date","Updated_At")
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,now())
-      RETURNING "ID"
-      `,
-      [fn, ln, jobTitle, phone, email, 'United Kingdom', 'United Kingdom', callerType, status, stage, '', 'Sample candidate', 'Auto-seeded sample record.', priority, assignee, nextCall]
-    );
-
-    const callLogsId = Number(inserted.rows[0].ID);
-    // eslint-disable-next-line no-await-in-loop
-    await pgQuery(
-      `INSERT INTO "ActivityLog" ("CallLogsID","Action","Detail","Entity","Created_By","Created_At") VALUES ($1,$2,$3,$4,$5,now())`,
-      [callLogsId, 'Contact Created', `Sample ${callerType} candidate seeded`, 'contact', 'System']
-    );
-
-    if (callerType === 'DRIVER') {
-      const licenseNo = `DVLA-${2020 + (i % 6)}-${String(1000 + i).padStart(4, '0')}`;
-      const cls = i % 3 === 0 ? 'Class C' : 'Class B';
-      // eslint-disable-next-line no-await-in-loop
-      await pgQuery(
-        `
-        INSERT INTO "DriverDetails"
-          ("CallLogsID","DriverName","LicenseNumber","LicenseClass","LicenseIssueDate","LicenseExpiryDate","DVLACheck","DBSCheck","PCOCheck","VehicleType","Notes","Created_At","Updated_At")
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now())
-        `,
-        [callLogsId, `${fn} ${ln}`, licenseNo, cls, '2021-01-01', '2028-01-01', 'Pending', 'Pending', 'Pending', i % 2 === 0 ? 'Van' : 'Car', '']
-      );
-    }
-  }
-}
-
 async function ensureSchema() {
   if (!ENABLED || schemaReady) return;
 
@@ -340,11 +274,20 @@ async function ensureSchema() {
     );
   }
 
-  // Ensure bootstrap admin exists
-  const email = normalizeEmail(process.env.ADMIN_EMAIL || 'it@zayagroupltd.com');
-  const password = String(process.env.ADMIN_PASSWORD || 'Kingsley06#').trim();
-  if (email && password) {
-    const { salt, hash } = createPasswordHash(password);
+  // Ensure bootstrap admin exists (do not use hardcoded credentials).
+  const configuredEmail = normalizeEmail(process.env.ADMIN_EMAIL || '');
+  const configuredPassword = String(process.env.ADMIN_PASSWORD || '').trim();
+  const email = configuredEmail || 'it@zayagroupltd.com';
+
+  const existingUsers = await pgQuery(`SELECT COUNT(*)::int AS c FROM "SystemUsers"`);
+  const userCount = Number(existingUsers.rows[0]?.c || 0);
+
+  if (!configuredPassword && userCount === 0) {
+    throw new Error('Missing ADMIN_PASSWORD. Set ADMIN_EMAIL and ADMIN_PASSWORD to bootstrap the first Super Admin.');
+  }
+
+  if (email && configuredPassword) {
+    const { salt, hash } = createPasswordHash(configuredPassword);
     await pgQuery(
       `
       INSERT INTO "SystemUsers" ("Name","Email","Role","Password_Salt","Password_Hash","IsActive","Updated_At")
@@ -360,18 +303,36 @@ async function ensureSchema() {
     );
   }
 
-  // Seed sample candidates once (only on empty databases).
-  const callLogCount = await pgQuery(`SELECT COUNT(*)::int AS c FROM "CallLogs"`);
-  if (Number(callLogCount.rows[0]?.c || 0) === 0) {
-    await seedSampleCandidatesPg();
-  }
-
   schemaReady = true;
 }
 
 async function withSchema(fn) {
   await ensureSchema();
   return fn();
+}
+
+async function runMaintenanceActionPg(action) {
+  const normalizedAction = String(action || '').trim();
+  if (!normalizedAction) {
+    throw new Error('Maintenance action is required.');
+  }
+
+  if (normalizedAction === 'purge-demo-data') {
+    await withSchema(async () => {
+      await pgQuery('BEGIN');
+      try {
+        await pgQuery('TRUNCATE "CallSessions", "DriverDetails", "ActivityLog", "CallLogs" RESTART IDENTITY CASCADE');
+        await pgQuery('COMMIT');
+      } catch (error) {
+        await pgQuery('ROLLBACK');
+        throw error;
+      }
+    });
+
+    return { action: normalizedAction, message: 'Purged demo/workspace data.' };
+  }
+
+  throw new Error('Unknown maintenance action.');
 }
 
 async function listSystemUsers() {
@@ -977,6 +938,7 @@ module.exports = {
   listSystemBackups,
   listLiveSystemUsers,
   listSystemUsers,
+  runMaintenanceActionPg,
   restoreSystemBackup,
   setSystemUserPassword,
   touchSystemSession,
