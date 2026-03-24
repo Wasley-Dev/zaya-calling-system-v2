@@ -54,10 +54,10 @@ import {
 
 const AUTH_KEY = 'zaya-auth-session';
 const REMEMBER_ME_KEY = 'zaya-remember-me';
-const LAST_LOGIN_ID_KEY = 'zaya-last-login-id';
-const THEME_KEY = 'zaya-theme';
-const ORIENTATION_KEY = 'zaya-ai-orientation-complete';
-const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com';
+const LAST_LOGIN_ID_KEY = 'zaya-last-login-id'; 
+const THEME_KEY = 'zaya-theme'; 
+const ORIENTATION_KEY = 'zaya-ai-orientation-complete'; 
+const ROOT_SYSTEM_EMAIL = 'it@zayagroupltd.com'; 
 const UTC_DAY_MS = 24 * 60 * 60 * 1000;
 const ROTATING_LOGIN_IMAGES = [
   '/login-visual.jpg?v=20260309-2',
@@ -67,9 +67,9 @@ const DEFAULT_CORPORATE_FACTS = [
   'Most stalled deals are process problems before they become people problems.',
   'Teams that measure next-action quality usually outperform teams that only measure volume.',
 ];
-const POWERED_BADGE_TEXT = 'Powered and protected by WAS for Zaya Calling System';
-const DEFAULT_USER = { name: 'Zaya Operations', email: 'it@zayagroupltd.com', role: 'Super Admin' };
-const FALLBACK_SETTINGS = {
+const POWERED_BADGE_TEXT = 'Powered and protected by WAS for Zaya Calling System'; 
+const DEFAULT_USER = { name: 'Zaya Operations', email: '', role: 'Super Admin' }; 
+const FALLBACK_SETTINGS = { 
   systemName: 'Zaya Calling System',
   systemTagline: 'Enterprise operations workspace',
   welcomeMessage: 'Welcome back',
@@ -188,13 +188,15 @@ function UpdateBanner({ updateInfo, onRefresh, syncInfo, onSyncNow }) {
   );
 }
 
-function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe, syncInfo, onSyncNow }) {
+function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe, syncInfo, onSyncNow }) { 
   const branding = normalizeSettings(settings);
   const rotatingExperience = getRotatingLoginExperience(branding);
-  const [email, setEmail] = useState(() => {
-    if (!initialRememberMe) return '';
-    return localStorage.getItem(LAST_LOGIN_ID_KEY) || '';
-  });
+  const [email, setEmail] = useState(() => { 
+    if (!initialRememberMe) return ''; 
+    const stored = localStorage.getItem(LAST_LOGIN_ID_KEY) || ''; 
+    if (stored.trim().toLowerCase() === ROOT_SYSTEM_EMAIL) return ''; 
+    return stored; 
+  }); 
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(initialRememberMe);
   const [error, setError] = useState('');
@@ -205,13 +207,15 @@ function LoginPage({ onLogin, settings, updateInfo, onRefresh, initialRememberMe
     setError('');
     setSubmitting(true);
     try {
-      const response = await loginToSystem({ email: email.trim().toLowerCase(), password });
-      if (rememberMe) {
-        localStorage.setItem(LAST_LOGIN_ID_KEY, email.trim());
-      } else {
-        localStorage.removeItem(LAST_LOGIN_ID_KEY);
-      }
-      onLogin(response.data.data, rememberMe);
+      const response = await loginToSystem({ email: email.trim().toLowerCase(), password }); 
+      if (rememberMe) { 
+        const trimmed = email.trim(); 
+        if (trimmed.toLowerCase() !== ROOT_SYSTEM_EMAIL) localStorage.setItem(LAST_LOGIN_ID_KEY, trimmed); 
+        else localStorage.removeItem(LAST_LOGIN_ID_KEY); 
+      } else { 
+        localStorage.removeItem(LAST_LOGIN_ID_KEY); 
+      } 
+      onLogin(response.data.data, rememberMe); 
     } catch (err) {
       setError(err?.response?.data?.error || 'Login failed. Check the configured credentials.');
     } finally {
@@ -682,11 +686,11 @@ function AdminConsole({ user, settings, onSaveSettings }) {
                   <input className="form-input" value={newUser.name} onChange={event => setNewUser(current => ({ ...current, name: event.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Email</label>
-                  <input className="form-input" type="email" value={newUser.email} onChange={event => setNewUser(current => ({ ...current, email: event.target.value }))} />
-                  <div className="form-hint">`it@zayagroupltd.com` is reserved for the primary super admin account.</div>
-                </div>
-              </div>
+                  <label className="form-label">Email</label> 
+                  <input className="form-input" type="email" value={newUser.email} onChange={event => setNewUser(current => ({ ...current, email: event.target.value }))} /> 
+                  <div className="form-hint">The primary super admin email is reserved and cannot be assigned to another user.</div> 
+                </div> 
+              </div> 
               <div className="form-row cols-2">
                 <div className="form-group">
                   <label className="form-label">Role</label>

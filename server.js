@@ -47,6 +47,12 @@ function createApp({ projectRoot = __dirname, runtimeRoot = projectRoot } = {}) 
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
 
+  app.get('/runtime-config.js', (_req, res) => {
+    const apiBaseUrl = String(process.env.ZAYA_API_BASE_URL || '').trim();
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.type('application/javascript').send(`window.__ZAYA_CONFIG__=${JSON.stringify({ apiBaseUrl })};`);
+  });
+
   if (!isProd) {
     app.use(morgan('dev'));
   }

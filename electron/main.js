@@ -95,14 +95,18 @@ function configureAutoUpdates() {
   });
 }
 
+function checkForUpdatesSafe(reason = 'scheduled') {
+  if (!app.isPackaged) return;
+  writeLog(`Update check requested (${reason})`);
+  autoUpdater.checkForUpdates().catch(error => {
+    writeLog(`Update check failed (${reason}): ${error?.stack || error?.message || error}`);
+  });
+}
+
 function scheduleAutoUpdateChecks() {
   if (!app.isPackaged) return;
-  const check = () => autoUpdater.checkForUpdates().catch(error => {
-    writeLog(`Update check failed: ${error?.stack || error?.message || error}`);
-  });
-
-  setTimeout(check, 15000);
-  setInterval(check, 6 * 60 * 60 * 1000);
+  setTimeout(() => checkForUpdatesSafe('startup'), 15000);
+  setInterval(() => checkForUpdatesSafe('interval'), 60 * 60 * 1000);
 }
 
 async function createMainWindow() {
@@ -149,7 +153,31 @@ async function createMainWindow() {
       await mainWindow.loadURL(`http://127.0.0.1:${port}`);
     } else {
       writeLog(`Loading UI from remote ${remoteUrl}`);
-      await mainWindow.loadURL(remoteUrl);
+      try {
+        await mainWindow.loadURL(remoteUrl);
+      } catch (error) {
+        writeLog(`Remote UI failed, falling back to embedded server: ${error?.message || error}`);
+
+        try {
+          const remoteOrigin = new URL(remoteUrl).origin;
+          process.env.ZAYA_API_BASE_URL = `${remoteOrigin}/api`;
+          writeLog(`Configured runtime API base URL ${process.env.ZAYA_API_BASE_URL}`);
+        } catch (_) {
+          // ignore
+        }
+
+        const { port, server } = await startServer({
+          port: 0,
+          host: '127.0.0.1',
+          projectRoot: PROJECT_ROOT,
+          runtimeRoot,
+        });
+
+        runtimeServer = server;
+        writeLog(`Embedded server started on port ${port}`);
+        writeLog(`Loading UI from http://127.0.0.1:${port}`);
+        await mainWindow.loadURL(`http://127.0.0.1:${port}`);
+      }
     }
     writeLog('UI loaded successfully');
     configureAutoUpdates();
@@ -173,6 +201,10 @@ function closeRuntimeServer() {
 }
 
 app.whenReady().then(createMainWindow);
+
+app.on('browser-window-focus', () => {
+  checkForUpdatesSafe('focus');
+});
 
 app.on('ready', () => {
   writeLog('Electron ready event fired');

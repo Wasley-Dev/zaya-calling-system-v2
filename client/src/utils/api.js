@@ -1,7 +1,13 @@
 import axios from 'axios';
 
+function getRuntimeApiBaseUrl() {
+  if (typeof window === 'undefined') return '';
+  const raw = window.__ZAYA_CONFIG__?.apiBaseUrl;
+  return raw ? String(raw).trim() : '';
+}
+
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE_URL || '/api',
+  baseURL: getRuntimeApiBaseUrl() || process.env.REACT_APP_API_BASE_URL || '/api',
 });
 
 const AUTH_KEY = 'zaya-auth-session';
@@ -140,6 +146,12 @@ function createTempId(prefix) {
 
 function isNetworkError(error) {
   return !error?.response && (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error' || error?.message?.includes('Network'));
+}
+
+function isOfflineFallbackError(error) {
+  if (isNetworkError(error)) return true;
+  const status = Number(error?.response?.status || 0);
+  return status === 408 || status >= 500;
 }
 
 function clone(value) {
@@ -370,17 +382,21 @@ async function replayOperation(operation, idMap) {
   });
 }
 
-async function flushOfflineQueue() {
-  if (typeof window === 'undefined' || !navigator.onLine || syncState.syncing) return;
-  const queue = getQueue();
-  if (!queue.length) {
-    updateSyncState({ online: navigator.onLine, pending: 0, syncing: false });
-    return;
-  }
-
-  updateSyncState({ online: navigator.onLine, syncing: true, pending: queue.length });
-  const idMap = {};
-  const remaining = [];
+async function flushOfflineQueue() { 
+  if (typeof window === 'undefined' || syncState.syncing) return; 
+  if (!navigator.onLine) { 
+    updateSyncState({ online: false }); 
+    return; 
+  } 
+  const queue = getQueue(); 
+  if (!queue.length) { 
+    updateSyncState({ online: true, pending: 0, syncing: false }); 
+    return; 
+  } 
+ 
+  updateSyncState({ online: true, syncing: true, pending: queue.length }); 
+  const idMap = {}; 
+  const remaining = []; 
 
   for (const operation of queue) {
     try {
@@ -424,13 +440,13 @@ async function flushOfflineQueue() {
       if (operation.meta?.kind === 'deleteContact') {
         removeOfflineContactRecord(String(idMap[operation.meta.contactId] || operation.meta.contactId));
       }
-    } catch (error) {
-      if (isNetworkError(error)) {
-        remaining.push(operation, ...queue.slice(queue.indexOf(operation) + 1));
-        break;
-      }
-      remaining.push(operation);
-    }
+    } catch (error) { 
+      if (isOfflineFallbackError(error)) { 
+        remaining.push(operation, ...queue.slice(queue.indexOf(operation) + 1)); 
+        break; 
+      } 
+      remaining.push(operation); 
+    } 
   }
 
   setQueue(remaining);
@@ -443,17 +459,22 @@ async function flushOfflineQueue() {
   });
 }
 
-function startOfflineSyncListeners() {
-  if (typeof window === 'undefined' || window.__zayaOfflineSyncInitialized) return;
-  window.__zayaOfflineSyncInitialized = true;
-  updateSyncState({ pending: getQueue().length, online: navigator.onLine });
-  window.addEventListener('online', () => {
-    updateSyncState({ online: true });
-    flushOfflineQueue();
-  });
-  window.addEventListener('offline', () => updateSyncState({ online: false }));
-  window.setTimeout(() => flushOfflineQueue(), 400);
-}
+function startOfflineSyncListeners() { 
+  if (typeof window === 'undefined' || window.__zayaOfflineSyncInitialized) return; 
+  window.__zayaOfflineSyncInitialized = true; 
+  updateSyncState({ pending: getQueue().length, online: navigator.onLine }); 
+  window.addEventListener('online', () => { 
+    updateSyncState({ online: true }); 
+    flushOfflineQueue(); 
+  }); 
+  window.addEventListener('offline', () => updateSyncState({ online: false })); 
+  window.setTimeout(() => flushOfflineQueue(), 400); 
+  window.setInterval(() => { 
+    if (!navigator.onLine) return; 
+    if (getQueue().length === 0) return; 
+    flushOfflineQueue(); 
+  }, 30000); 
+} 
 
 startOfflineSyncListeners();
 
@@ -472,7 +493,7 @@ async function getWithOfflineFallback(url, params, transform) {
     setCachedResponse(url, params, response.data);
     return response;
   } catch (error) {
-    if (!isNetworkError(error) && navigator.onLine) throw error;
+    if (!isOfflineFallbackError(error)) throw error;
     const cached = getCachedResponse(url, params);
     if (!cached) throw error;
     const payload = transform ? transform(cached) : cached;
@@ -522,7 +543,7 @@ export const createContact = async data => {
     invalidateCache();
     return response;
   } catch (error) {
-    if (!isNetworkError(error) && navigator.onLine) throw error;
+    if (!isOfflineFallbackError(error)) throw error;
     const tempId = createTempId('offline-contact');
     const now = new Date().toISOString();
     const optimistic = {
@@ -560,9 +581,24 @@ export const updateContact = async (id, data) => {
     }, optimistic);
   }
 
-  const response = await api.put(`/contacts/${id}`, data);
-  invalidateCache();
-  return response;
+  try {
+    const response = await api.put(`/contacts/${id}`, data);
+    invalidateCache();
+    return response;
+  } catch (error) {
+    if (!isOfflineFallbackError(error)) throw error;
+    const existing = getOfflineContactDetail(id) || {};
+    const optimistic = { ...existing, ...data, ID: id, Updated_At: new Date().toISOString(), __offline: true };
+    updateOfflineContactRecord(id, optimistic);
+    recordQueuedActivity(id, 'Contact Updated Offline', 'Changes queued for sync');
+    return queueMutation({
+      id: createTempId('queue'),
+      method: 'put',
+      url: `/contacts/${id}`,
+      data,
+      meta: { kind: 'updateContact', contactId: id },
+    }, optimistic);
+  }
 };
 
 export const quickUpdate = async (id, data) => {
@@ -579,9 +615,23 @@ export const quickUpdate = async (id, data) => {
     }, optimistic);
   }
 
-  const response = await api.patch(`/contacts/${id}/quick`, data);
-  invalidateCache();
-  return response;
+  try {
+    const response = await api.patch(`/contacts/${id}/quick`, data);
+    invalidateCache();
+    return response;
+  } catch (error) {
+    if (!isOfflineFallbackError(error)) throw error;
+    const existing = getOfflineContactDetail(id) || {};
+    const optimistic = { ...existing, ...data, ID: id, Updated_At: new Date().toISOString(), __offline: true };
+    updateOfflineContactRecord(id, optimistic);
+    return queueMutation({
+      id: createTempId('queue'),
+      method: 'patch',
+      url: `/contacts/${id}/quick`,
+      data,
+      meta: { kind: 'quickUpdate', contactId: id },
+    }, optimistic);
+  }
 };
 
 export const deleteContact = async id => {
@@ -595,13 +645,24 @@ export const deleteContact = async id => {
     }, { id });
   }
 
-  const response = await api.delete(`/contacts/${id}`);
-  invalidateCache();
-  return response;
+  try {
+    const response = await api.delete(`/contacts/${id}`);
+    invalidateCache();
+    return response;
+  } catch (error) {
+    if (!isOfflineFallbackError(error)) throw error;
+    updateOfflineContactRecord(id, { __deletedOffline: true, Updated_At: new Date().toISOString() });
+    return queueMutation({
+      id: createTempId('queue'),
+      method: 'delete',
+      url: `/contacts/${id}`,
+      meta: { kind: 'deleteContact', contactId: id },
+    }, { id });
+  }
 };
 
-export const logCall = async (id, data) => {
-  if (String(id).startsWith('offline-contact-') || !navigator.onLine) {
+export const logCall = async (id, data) => { 
+  if (String(id).startsWith('offline-contact-') || !navigator.onLine) { 
     const sessionId = createTempId('offline-call');
     const optimistic = {
       SessionID: sessionId,
@@ -622,32 +683,67 @@ export const logCall = async (id, data) => {
       url: `/contacts/${id}/calls`,
       data,
       meta: { kind: 'logCall', contactId: id, sessionId },
-    }, optimistic);
-  }
-
-  const response = await api.post(`/contacts/${id}/calls`, data);
-  invalidateCache();
-  return response;
-};
-
-export const deleteCall = async (id, sid) => {
-  if (String(sid).startsWith('offline-call') || !navigator.onLine) {
+    }, optimistic); 
+  } 
+ 
+  try { 
+    const response = await api.post(`/contacts/${id}/calls`, data); 
+    invalidateCache(); 
+    return response; 
+  } catch (error) { 
+    if (!isOfflineFallbackError(error)) throw error; 
+    const sessionId = createTempId('offline-call'); 
+    const optimistic = { 
+      SessionID: sessionId, 
+      CallLogsID: id, 
+      Outcome: data.Outcome || 'Successful', 
+      Duration_Min: data.Duration_Min || 0, 
+      Notes: data.Notes || '', 
+      Called_By: data.Called_By || '', 
+      Called_At: new Date().toISOString(), 
+      Next_Action: data.Next_Action || '', 
+      __offline: true, 
+    }; 
+    addOfflineCall(String(id), optimistic); 
+    recordQueuedActivity(id, 'Call Logged Offline', optimistic.Outcome, optimistic.Called_By || 'Offline User'); 
+    return queueMutation({ 
+      id: createTempId('queue'), 
+      method: 'post', 
+      url: `/contacts/${id}/calls`, 
+      data, 
+      meta: { kind: 'logCall', contactId: id, sessionId }, 
+    }, optimistic); 
+  } 
+}; 
+ 
+export const deleteCall = async (id, sid) => { 
+  if (String(sid).startsWith('offline-call') || !navigator.onLine) { 
     removeOfflineCall(String(id), sid);
     return queueMutation({
       id: createTempId('queue'),
       method: 'delete',
       url: `/contacts/${id}/calls/${sid}`,
       meta: { kind: 'deleteCall', contactId: id, sessionId: sid },
-    }, { SessionID: sid });
-  }
+    }, { SessionID: sid }); 
+  } 
+ 
+  try { 
+    const response = await api.delete(`/contacts/${id}/calls/${sid}`); 
+    invalidateCache(); 
+    return response; 
+  } catch (error) { 
+    if (!isOfflineFallbackError(error)) throw error; 
+    return queueMutation({ 
+      id: createTempId('queue'), 
+      method: 'delete', 
+      url: `/contacts/${id}/calls/${sid}`, 
+      meta: { kind: 'deleteCall', contactId: id, sessionId: sid }, 
+    }, { SessionID: sid }); 
+  } 
+}; 
 
-  const response = await api.delete(`/contacts/${id}/calls/${sid}`);
-  invalidateCache();
-  return response;
-};
-
-export const uploadAttachment = async (id, file) => {
-  if (!navigator.onLine || String(id).startsWith('offline-contact-')) {
+export const uploadAttachment = async (id, file) => { 
+  if (!navigator.onLine || String(id).startsWith('offline-contact-')) { 
     const attachmentId = createTempId('offline-attachment');
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -677,32 +773,75 @@ export const uploadAttachment = async (id, file) => {
         dataUrl,
       },
     }, optimistic);
-  }
-
-  const formData = new FormData();
-  formData.append('file', file);
-  const response = await api.post(`/contacts/${id}/attachments`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  invalidateCache();
-  return response;
-};
-
-export const deleteAttachment = async (id, attachmentId) => {
-  if (String(attachmentId).startsWith('offline-attachment') || !navigator.onLine) {
+  } 
+ 
+  const formData = new FormData(); 
+  formData.append('file', file); 
+  try { 
+    const response = await api.post(`/contacts/${id}/attachments`, formData, { 
+      headers: { 'Content-Type': 'multipart/form-data' }, 
+    }); 
+    invalidateCache(); 
+    return response; 
+  } catch (error) { 
+    if (!isOfflineFallbackError(error)) throw error; 
+    const attachmentId = createTempId('offline-attachment'); 
+    const dataUrl = await new Promise((resolve, reject) => { 
+      const reader = new FileReader(); 
+      reader.onload = () => resolve(reader.result); 
+      reader.onerror = reject; 
+      reader.readAsDataURL(file); 
+    }); 
+    const optimistic = { 
+      id: attachmentId, 
+      filename: file.name, 
+      path: '', 
+      size: file.size, 
+      uploaded: new Date().toISOString(), 
+      __offline: true, 
+    }; 
+    addOfflineAttachment(String(id), optimistic); 
+    return queueMutation({ 
+      id: createTempId('queue'), 
+      method: 'post', 
+      url: `/contacts/${id}/attachments`, 
+      meta: { 
+        kind: 'uploadAttachment', 
+        contactId: id, 
+        attachmentId, 
+        fileName: file.name, 
+        mimeType: file.type, 
+        dataUrl, 
+      }, 
+    }, optimistic); 
+  } 
+}; 
+ 
+export const deleteAttachment = async (id, attachmentId) => { 
+  if (String(attachmentId).startsWith('offline-attachment') || !navigator.onLine) { 
     removeOfflineAttachment(String(id), attachmentId);
     return queueMutation({
       id: createTempId('queue'),
       method: 'delete',
       url: `/contacts/${id}/attachments/${attachmentId}`,
       meta: { kind: 'deleteAttachment', contactId: id, attachmentId },
-    }, { id: attachmentId });
-  }
-
-  const response = await api.delete(`/contacts/${id}/attachments/${attachmentId}`);
-  invalidateCache();
-  return response;
-};
+    }, { id: attachmentId }); 
+  } 
+ 
+  try { 
+    const response = await api.delete(`/contacts/${id}/attachments/${attachmentId}`); 
+    invalidateCache(); 
+    return response; 
+  } catch (error) { 
+    if (!isOfflineFallbackError(error)) throw error; 
+    return queueMutation({ 
+      id: createTempId('queue'), 
+      method: 'delete', 
+      url: `/contacts/${id}/attachments/${attachmentId}`, 
+      meta: { kind: 'deleteAttachment', contactId: id, attachmentId }, 
+    }, { id: attachmentId }); 
+  } 
+}; 
 
 export const getAllDrivers = () => getWithOfflineFallback('/driver-details', null, cached => ({
   ...cached,
@@ -722,8 +861,8 @@ export const getDriverByContact = id => getWithOfflineFallback(`/driver-details/
   return { ...cached, data: offline || cached.data };
 });
 
-export const saveDriver = async data => {
-  if (!navigator.onLine || String(data.CallLogsID).startsWith('offline-contact-')) {
+export const saveDriver = async data => { 
+  if (!navigator.onLine || String(data.CallLogsID).startsWith('offline-contact-')) { 
     const driverKey = String(data.CallLogsID);
     const optimistic = {
       ...data,
@@ -739,16 +878,36 @@ export const saveDriver = async data => {
       url: '/driver-details',
       data,
       meta: { kind: 'saveDriver', driverKey },
-    }, optimistic);
-  }
-
-  const response = await api.post('/driver-details', data);
-  invalidateCache();
-  return response;
-};
-
-export const updateDriver = async (id, data) => {
-  if (!navigator.onLine) {
+    }, optimistic); 
+  } 
+ 
+  try { 
+    const response = await api.post('/driver-details', data); 
+    invalidateCache(); 
+    return response; 
+  } catch (error) { 
+    if (!isOfflineFallbackError(error)) throw error; 
+    const driverKey = String(data.CallLogsID); 
+    const optimistic = { 
+      ...data, 
+      DriverDetailID: createTempId('offline-driver'), 
+      _offlineCallLogsId: data.CallLogsID, 
+      __offline: true, 
+      Updated_At: new Date().toISOString(), 
+    }; 
+    updateOfflineDriverRecord(driverKey, optimistic); 
+    return queueMutation({ 
+      id: createTempId('queue'), 
+      method: 'post', 
+      url: '/driver-details', 
+      data, 
+      meta: { kind: 'saveDriver', driverKey }, 
+    }, optimistic); 
+  } 
+}; 
+ 
+export const updateDriver = async (id, data) => { 
+  if (!navigator.onLine) { 
     const driverKey = String(data.CallLogsID || id);
     const optimistic = { ...data, DriverDetailID: id, Updated_At: new Date().toISOString(), __offline: true };
     updateOfflineDriverRecord(driverKey, optimistic);
@@ -758,13 +917,27 @@ export const updateDriver = async (id, data) => {
       url: `/driver-details/${id}`,
       data,
       meta: { kind: 'updateDriver', driverKey },
-    }, optimistic);
-  }
-
-  const response = await api.put(`/driver-details/${id}`, data);
-  invalidateCache();
-  return response;
-};
+    }, optimistic); 
+  } 
+ 
+  try { 
+    const response = await api.put(`/driver-details/${id}`, data); 
+    invalidateCache(); 
+    return response; 
+  } catch (error) { 
+    if (!isOfflineFallbackError(error)) throw error; 
+    const driverKey = String(data.CallLogsID || id); 
+    const optimistic = { ...data, DriverDetailID: id, Updated_At: new Date().toISOString(), __offline: true }; 
+    updateOfflineDriverRecord(driverKey, optimistic); 
+    return queueMutation({ 
+      id: createTempId('queue'), 
+      method: 'put', 
+      url: `/driver-details/${id}`, 
+      data, 
+      meta: { kind: 'updateDriver', driverKey }, 
+    }, optimistic); 
+  } 
+}; 
 
 export const getCallLogs = () => getWithOfflineFallback('/call-logs');
 export const getActivity = n => getWithOfflineFallback(`/activity`, { limit: n || 40 });
